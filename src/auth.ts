@@ -5,6 +5,7 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import prisma from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import { checkRateLimit, logAudit } from '@/lib/auth-helpers';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
     ...authConfig,
@@ -18,7 +19,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 email: {},
                 password: {},
             },
+
+
             async authorize(credentials) {
+                try {
+                    await checkRateLimit();
+                } catch (error) {
+                    // Return null to indicate failure (NextAuth will say "CredentialsSignin" by default or we can throw)
+                    // Custom error handling in NextAuth is tricky, usually returns generic error.
+                    // For MVP, just failing is enough security.
+                    console.error("Rate limit exceeded or error:", error);
+                    return null;
+                }
+
                 const parsedCredentials = z
                     .object({ email: z.string().email(), password: z.string().min(4) })
                     .safeParse(credentials);
@@ -35,6 +48,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     const passwordsMatch = await bcrypt.compare(password, user.password);
 
                     if (passwordsMatch) {
+                        try {
+                            await logAudit('LOGIN_SUCCESS', user.id, user.farmId || 'system', { email });
+                        } catch (e) {
+                            console.error("Audit log error", e);
+                        }
+
                         return {
                             id: user.id,
                             name: user.name,

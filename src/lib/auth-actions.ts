@@ -1,7 +1,8 @@
 'use server';
 
-import { signIn, signOut } from '@/auth';
+import { signIn, signOut, auth } from '@/auth';
 import { AuthError } from 'next-auth';
+import { logAudit } from '@/lib/auth-helpers';
 
 export async function authenticate(
     prevState: string | undefined,
@@ -23,5 +24,14 @@ export async function authenticate(
 }
 
 export async function logout() {
+    try {
+        const session = await auth();
+        if (session?.user) {
+            const { id, farmId, email } = session.user;
+            await logAudit('LOGOUT', id, farmId || 'system', { email });
+        }
+    } catch (e) {
+        console.error("Logout log error", e);
+    }
     await signOut({ redirectTo: "/" });
 }
