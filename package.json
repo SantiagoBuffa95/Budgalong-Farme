@@ -10,12 +10,16 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
     "@prisma/client": "^5.22.0",
     "@supabase/supabase-js": "^2.90.1",
     "bcryptjs": "^3.0.3",
     "chart.js": "^4.5.1",
+    "dotenv": "^17.2.3",
     "jspdf": "^4.0.0",
     "jspdf-autotable": "^5.0.7",
     "lru-cache": "^11.2.4",
@@ -37,8 +41,3 @@
     "vitest": "^4.0.17"
   }
 }
-
-
-
-
-
