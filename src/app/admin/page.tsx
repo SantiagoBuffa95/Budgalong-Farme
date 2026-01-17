@@ -1,8 +1,11 @@
 import Link from "next/link";
 import styles from "./admin.module.css";
 import LogoutButton from "../components/LogoutButton";
+import { getAdminStats } from "@/lib/reports-actions";
 
-export default function AdminDashboard() {
+export default async function AdminDashboard() {
+    const stats = await getAdminStats();
+
     return (
         <div className="container">
             <header className={styles.header} style={{ position: 'relative' }}>
@@ -15,23 +18,18 @@ export default function AdminDashboard() {
 
             <div className="grid-auto">
                 <div className="card">
-                    <div className={styles.icon}>⚖️</div>
-                    <h3>Legal Section</h3>
-                    <p>Check hiring laws and the updated Pastoral Award 2020.</p>
-                    <Link href="/admin/legal" className="btn btn-primary">View Laws</Link>
-                </div>
-
-                <div className="card">
                     <div className={styles.icon}>📋</div>
-                    <h3>Employee Contracts</h3>
-                    <p>Manage profiles, contract types, and hourly rates for each worker.</p>
+                    <h3>Staff & Contracts</h3>
+                    <p><strong>{stats.activeEmployees}</strong> Active Employees</p>
+                    <p><strong>{stats.contractsDraft}</strong> Draft Contracts</p>
                     <Link href="/admin/staff" className="btn btn-primary">Manage Staff</Link>
                 </div>
 
                 <div className="card">
                     <div className={styles.icon}>✅</div>
                     <h3>Payroll Approvals</h3>
-                    <p>Review submitted timesheets and generate PDF payslips.</p>
+                    <p><strong>{stats.pendingTimesheets}</strong> Pending Timesheets</p>
+                    <p>Last Pay Run: {stats.lastPayRunDate || "Never"}</p>
                     <Link href="/admin/payroll" className="btn btn-primary" style={{ width: '100%' }}>View & Approve</Link>
                 </div>
 
@@ -43,6 +41,13 @@ export default function AdminDashboard() {
                         <Link href="/admin/reports" className="btn btn-secondary">View Charts</Link>
                         <Link href="/admin/payroll/test" className="btn btn-secondary" style={{ fontSize: '0.8rem' }}>Playground</Link>
                     </div>
+                </div>
+
+                <div className="card">
+                    <div className={styles.icon}>⚖️</div>
+                    <h3>Legal Section</h3>
+                    <p>Check hiring laws and the Pastoral Award 2020.</p>
+                    <Link href="/admin/legal" className="btn btn-primary">View Laws</Link>
                 </div>
             </div>
         </div>
