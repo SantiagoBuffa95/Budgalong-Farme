@@ -1,0 +1,275 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// NextAuth Core Tables
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// --- Domain Tables ---
+
+model Farm {
+  id        String   @id @default(uuid())
+  name      String
+  abn       String?
+  address   String?
+  timezone  String   @default("Australia/Sydney")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  users           User[]
+  employees       Employee[]
+  contracts       Contract[]
+  timesheets      Timesheet[]
+  payRuns         PayRun[]
+  payslips        Payslip[]
+  leaveBalances   LeaveBalance[]
+  holidayCalendar HolidayCalendar[]
+  auditLogs       AuditLog[]
+
+  @@map("farms")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  farmId    String   @map("farm_id")
+  userId    String   @map("user_id") // Who performed the action
+  action    String   // e.g., "CONTRACT_CREATED", "TIMESHEET_APPROVED"
+  targetId  String?  @map("target_id") // ID of the object affected (Contract ID, etc.)
+  details   Json?
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  farm Farm @relation(fields: [farmId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  farmId        String?   @map("farm_id") // Nullable for super_admin
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  password      String? // hashed
+  role          String    @default("employee") // admin, employee, accountant
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt
+
+  farm          Farm?      @relation(fields: [farmId], references: [id])
+  accounts      Account[]
+  sessions      Session[]
+  employeeProfile Employee? // Link to employee record if this user is an employee
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Employee {
+  id                   String    @id @default(uuid())
+  farmId               String    @map("farm_id")
+  userId               String?   @unique @map("user_id") // Nullable if invite not accepted
+  legalName            String    @map("legal_name")
+  preferredName        String?   @map("preferred_name")
+  phone                String?
+  employmentStatus     String    @map("employment_status") // active, terminated, etc
+  startDate            DateTime  @map("start_date")
+  endDate              DateTime? @map("end_date")
+  ordinaryHoursPerWeek Decimal   @map("ordinary_hours_per_week")
+  createdAt            DateTime  @default(now()) @map("created_at")
+
+  farm       Farm        @relation(fields: [farmId], references: [id])
+  user       User?       @relation(fields: [userId], references: [id])
+  contracts  Contract[]
+  timesheets Timesheet[]
+  payslips   Payslip[] // Can have many
+  leaveBalance LeaveBalance?
+
+  @@map("employees")
+}
+
+model Contract {
+  id                   String   @id @default(uuid())
+  farmId               String   @map("farm_id")
+  employeeId           String   @map("employee_id")
+  type                 String // full_time, part_time, casual, salary, contractor
+  classification       String
+  baseRateHourly       Decimal? @map("base_rate_hourly")
+  salaryAnnual         Decimal? @map("salary_annual")
+  ordinaryHoursPerWeek Decimal  @map("ordinary_hours_per_week")
+  overtimeMode         String   @map("overtime_mode") // award_default, included_up_to_X, paid_in_addition
+  allowancesConfig     Json?    @map("allowances_config")
+  deductionsConfig     Json?    @map("deductions_config")
+  awardPackVersion     String   @map("award_pack_version")
+  status               String   @default("draft") // draft, active, superseded
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  farm     Farm              @relation(fields: [farmId], references: [id])
+  employee Employee          @relation(fields: [employeeId], references: [id])
+  versions ContractVersion[]
+
+  @@map("contracts")
+}
+
+model ContractVersion {
+  id                  String    @id @default(uuid())
+  contractId          String    @map("contract_id")
+  versionNumber       Int       @map("version_number")
+  snapshotJson        Json      @map("snapshot_json")
+  acceptedByEmployeeAt DateTime? @map("accepted_by_employee_at")
+  acceptedByAdminAt   DateTime? @map("accepted_by_admin_at")
+
+  contract Contract @relation(fields: [contractId], references: [id])
+
+  @@map("contract_versions")
+}
+
+model Timesheet {
+  id            String      @id @default(uuid())
+  farmId        String      @map("farm_id")
+  employeeId    String      @map("employee_id")
+  weekStartDate DateTime    @map("week_start_date")
+  weekEndDate   DateTime    @map("week_end_date")
+  status        String      @default("draft") // draft, submitted, approved, paid
+  submittedAt   DateTime?   @map("submitted_at")
+  approvedAt    DateTime?   @map("approved_at")
+
+  farm    Farm             @relation(fields: [farmId], references: [id])
+  employee Employee        @relation(fields: [employeeId], references: [id])
+  entries TimesheetEntry[]
+
+  @@map("timesheets")
+}
+
+model TimesheetEntry {
+  id           String   @id @default(uuid())
+  timesheetId  String   @map("timesheet_id")
+  date         DateTime
+  startTime    DateTime @map("start_time")
+  endTime      DateTime @map("end_time")
+  breakMinutes Int      @map("break_minutes")
+  taskCode     String?  @map("task_code")
+  notes        String?
+
+  timesheet Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+
+  @@map("timesheet_entries")
+}
+
+model PayRun {
+  id          String    @id @default(uuid())
+  farmId      String    @map("farm_id")
+  periodStart DateTime  @map("period_start")
+  periodEnd   DateTime  @map("period_end")
+  payDate     DateTime? @map("pay_date")
+  status      String    @default("draft") // draft, finalized
+  createdBy   String    @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  farm     Farm      @relation(fields: [farmId], references: [id])
+  payslips Payslip[]
+
+  @@map("pay_runs")
+}
+
+model Payslip {
+  id              String   @id @default(uuid())
+  farmId          String   @map("farm_id")
+  employeeId      String   @map("employee_id")
+  payRunId        String   @map("pay_run_id")
+  gross           Decimal
+  net             Decimal
+  tax             Decimal
+  super_          Decimal  @map("super") // 'super' is reserved in some langs, mapping safe
+  allowancesTotal Decimal  @map("allowances_total")
+  deductionsTotal Decimal  @map("deductions_total")
+  pdfUrl          String?  @map("pdf_url")
+  issuedAt        DateTime @default(now()) @map("issued_at")
+
+  farm     Farm     @relation(fields: [farmId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+  payRun   PayRun   @relation(fields: [payRunId], references: [id])
+
+  @@map("payslips")
+}
+
+model LeaveBalance {
+  id               String   @id @default(uuid())
+  farmId           String   @map("farm_id")
+  employeeId       String   @unique @map("employee_id") // One balance record per employee (simplification for MVP: just Annual Leave)
+  annualLeaveHours Decimal  @default(0) @map("annual_leave_hours")
+  lastAccrualAt    DateTime @default(now()) @map("last_accrual_at")
+
+  farm         Farm               @relation(fields: [farmId], references: [id])
+  employee     Employee           @relation(fields: [employeeId], references: [id])
+  transactions LeaveTransaction[]
+
+  @@map("leave_balances")
+}
+
+model LeaveTransaction {
+  id            String   @id @default(uuid())
+  balanceId     String   @map("balance_id")
+  type          String // accrual, taken, adjustment
+  hours         Decimal
+  effectiveDate DateTime @map("effective_date")
+  note          String?
+
+  balance LeaveBalance @relation(fields: [balanceId], references: [id])
+
+  @@map("leave_transactions")
+}
+
+model HolidayCalendar {
+  id                 String  @id @default(uuid())
+  farmId             String? @map("farm_id") // Nullable = System Default (NSW)
+  date               DateTime
+  name               String
+  type               String // public_holiday, local_public_holiday, observance
+  regionCode         String? @map("region_code")
+  multiplierPolicyRef String? @map("multiplier_policy_ref")
+  sourceUrl          String? @map("source_url")
+
+  farm Farm? @relation(fields: [farmId], references: [id])
+
+  @@map("holiday_calendar")
+}

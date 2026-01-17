@@ -1,0 +1,45 @@
+.header {
+    padding: 4rem 0 2rem;
+}
+
+.backLink {
+    color: var(--accent);
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.dashboardGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.infoList {
+    list-style: none;
+    margin-top: 1rem;
+}
+
+.infoList li {
+    margin-bottom: 0.8rem;
+    font-size: 1.1rem;
+}
+
+.payrollSection {
+    margin-top: 2rem;
+}
+
+.emptyState {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: var(--radius-sm);
+    text-align: center;
+    color: #999;
+    border: 2px dashed #ddd;
+}
+
+@media (max-width: 768px) {
+    .dashboardGrid {
+        grid-template-columns: 1fr;
+    }
+}

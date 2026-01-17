@@ -1,0 +1,79 @@
+.header {
+    padding: 4rem 0 2rem;
+    text-align: center;
+}
+
+.backLink {
+    color: var(--accent);
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    display: block;
+}
+
+.gridRow {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.inputGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 120px;
+}
+
+.inputGroup label {
+    font-weight: 800;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.inputGroup input,
+.inputGroup select {
+    padding: 0.8rem;
+    border-radius: var(--radius-sm);
+    border: 3px solid #000;
+    font-family: inherit;
+    font-size: 1rem;
+    width: 100%;
+}
+
+.inputGroup input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background-color: #f9fff9;
+}
+
+.togglesRow {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    cursor: pointer;
+    background: white;
+    padding: 0.5rem 0.8rem;
+    border: 2px solid #eee;
+    border-radius: var(--radius-sm);
+}
+
+.checkbox input {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+@media (max-width: 600px) {
+    .gridRow {
+        flex-direction: column;
+        gap: 1rem;
+    }
+}

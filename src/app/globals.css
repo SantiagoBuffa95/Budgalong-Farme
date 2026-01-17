@@ -1,0 +1,138 @@
+:root {
+  /* Cartoonish Palette */
+  --primary: #4CAF50;
+  /* Grass Green */
+  --primary-hover: #45a049;
+  --secondary: #FFC107;
+  /* Sun Yellow */
+  --accent: #FF5722;
+  /* Earth/Clay Red */
+  --background: #F0F4F8;
+  /* Soft Sky Blue/Gray */
+  --foreground: #2C3E50;
+  /* Darker Slate */
+  --card-bg: #FFFFFF;
+  --wool-white: #FBFCFC;
+
+  /* Styling Tokens */
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 32px;
+
+  /* "Sticker" Shadow Effect */
+  --shadow-sm: 0 4px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 8px 0 rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 0 rgba(0, 0, 0, 0.1);
+
+  /* Fonts */
+  --font-main: var(--font-outfit), system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-main);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Base Cartoon Components */
+
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  padding: 2rem;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.1);
+  border: 3px solid #000;
+  /* Thick border for caricature look */
+  transition: transform 0.1s ease;
+}
+
+.card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.15);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.8rem 1.5rem;
+  border-radius: var(--radius-sm);
+  font-weight: 800;
+  cursor: pointer;
+  border: 3px solid #000;
+  /* Thick border */
+  transition: all 0.1s ease;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+a,
+button,
+.btn {
+  color: inherit;
+  text-decoration: none;
+}
+
+a:hover,
+button:hover,
+.btn:hover {
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+  box-shadow: 4px 4px 0 #1B5E20;
+}
+
+.btn-primary:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0 #1B5E20;
+}
+
+.btn-secondary {
+  background: var(--secondary);
+  color: #000;
+  box-shadow: 4px 4px 0 #FF8F00;
+}
+
+.btn-secondary:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0 #FF8F00;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 900;
+  color: var(--foreground);
+  margin-bottom: 1rem;
+}
+
+/* Layout Utilities */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.grid-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+}

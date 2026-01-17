@@ -1,0 +1,81 @@
+.header {
+    padding: 4rem 0 2rem;
+    text-align: center;
+}
+
+.backLink {
+    color: var(--primary);
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    display: block;
+}
+
+.toggleGroup {
+    display: flex;
+    border: 3px solid #000;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.toggleBtn {
+    background: #fff;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    font-weight: 700;
+    cursor: pointer;
+    border-right: 2px solid #000;
+    font-family: inherit;
+    transition: background 0.2s;
+}
+
+.toggleBtn:last-child {
+    border-right: none;
+}
+
+.toggleBtn:hover {
+    background: #f0f0f0;
+}
+
+.toggleBtn.active {
+    background: var(--secondary);
+    color: #000;
+}
+
+.inputGroup {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.inputGroup label {
+    font-weight: 700;
+}
+
+.inputGroup input {
+    padding: 0.8rem;
+    border: 3px solid #000;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-weight: bold;
+}
+
+.statRow {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 1rem;
+}
+
+.bigNumber {
+    font-size: 3rem;
+    font-weight: 900;
+    color: var(--foreground);
+    line-height: 1;
+}
+
+.statDetail {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+}
