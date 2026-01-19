@@ -3,63 +3,54 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import styles from "./payroll.module.css";
-import { getTimesheets, getContracts, approveTimesheet } from "@/lib/actions";
-import { calculateWeeklyPay } from "@/lib/payroll";
-import { generatePaySlipPDF } from "@/lib/pdf";
-import { Contract, WeeklyTimesheet } from "@/lib/types";
+import { getTimesheets, getContracts } from "@/lib/actions";
+import { createPayRun } from "@/lib/payroll-actions";
 
 export default function AdminPayrollPage() {
-    const [timesheets, setTimesheets] = useState<WeeklyTimesheet[]>([]);
-    const [contracts, setContracts] = useState<Contract[]>([]);
+    const [timesheets, setTimesheets] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [selectedTs, setSelectedTs] = useState<WeeklyTimesheet | null>(null);
+    const [selectedTs, setSelectedTs] = useState<any | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     useEffect(() => {
         async function load() {
-            const [tsData, contractData] = await Promise.all([
-                getTimesheets(),
-                getContracts()
-            ]);
+            const tsData = await getTimesheets();
             setTimesheets(tsData);
-            setContracts(contractData);
             setIsLoading(false);
         }
         load();
     }, []);
 
-    const handleProcess = async (ts: WeeklyTimesheet) => {
-        const contract = contracts.find(c => c.id === ts.employeeId);
-        if (!contract) {
-            alert("Error: Employee contract not found!");
-            return;
-        }
+    const handleProcessAll = async () => {
+        if (!confirm("Start Pay Run for all approved timesheets?")) return;
 
+        setIsProcessing(true);
         try {
-            // 1. Calculate
-            const payslip = calculateWeeklyPay(contract, ts.entries);
+            // MVP: Using a fixed period for demo, usually controlled by date picker
+            const start = new Date();
+            start.setDate(start.getDate() - 7);
+            const end = new Date();
 
-            // 2. Generate PDF
-            generatePaySlipPDF(contract, payslip);
-
-            // 3. Mark as Approved/Paid
-            const result = await approveTimesheet(ts.id);
+            const result = await createPayRun(start, end);
             if (result.success) {
-                setTimesheets(prev => prev.map(item => item.id === ts.id ? { ...item, status: 'Approved' } : item));
-                alert("Payroll processed and PDF downloaded!");
-                setSelectedTs(null);
+                alert(`Pay Run successful! Created ${result.count} payslips.`);
+                // Refresh data
+                const tsData = await getTimesheets();
+                setTimesheets(tsData);
             } else {
-                alert("Failed to update status in database.");
+                alert("Error: " + result.message);
             }
         } catch (err) {
-            console.error("Processing error:", err);
-            alert("An error occurred while processing payroll. Check console.");
+            alert("Processing failed.");
+        } finally {
+            setIsProcessing(false);
         }
     };
 
-    if (isLoading) return <div className="container">Loading...</div>;
+    if (isLoading) return <div className="container" style={{ padding: '2rem' }}>Loading...</div>;
 
-    const pending = timesheets.filter(t => t.status === 'Pending');
-    const approved = timesheets.filter(t => t.status === 'Approved');
+    const pending = timesheets.filter(t => t.status === 'Pending' || t.status === 'submitted');
+    const approved = timesheets.filter(t => t.status === 'Approved' || t.status === 'paid');
 
     return (
         <div className="container">
@@ -67,6 +58,15 @@ export default function AdminPayrollPage() {
                 <Link href="/admin" className={styles.backLink}>← Back to Home</Link>
                 <h1>Weekly Payroll Processing</h1>
                 <p>Review and approve weekly hours submitted by staff.</p>
+                <div style={{ marginTop: '1rem' }}>
+                    <button
+                        className="btn btn-primary"
+                        onClick={handleProcessAll}
+                        disabled={isProcessing || pending.length === 0}
+                    >
+                        {isProcessing ? 'Processing...' : `🚀 Start Pay Run for ${pending.length} Staff`}
+                    </button>
+                </div>
             </header>
 
             <section style={{ marginBottom: '3rem' }}>
@@ -77,14 +77,11 @@ export default function AdminPayrollPage() {
                     </div>
                 ) : (
                     <div className="grid-auto">
-                        {pending.map(ts => (
+                        {pending.map((ts: any) => (
                             <div key={ts.id} className="card" onClick={() => setSelectedTs(ts)} style={{ cursor: 'pointer', borderColor: selectedTs?.id === ts.id ? 'var(--primary)' : 'transparent' }}>
                                 <h3>{ts.employeeName}</h3>
                                 <p>Week Ending: <strong>{ts.weekEnding}</strong></p>
-                                <p>Days worked: {ts.entries.length}</p>
-                                <div style={{ marginTop: '1rem', color: 'var(--primary)', fontWeight: 'bold', fontSize: '0.9rem' }}>
-                                    👉 Click to Review & Approve
-                                </div>
+                                <p>Status: <span style={{ color: 'orange' }}>{ts.status}</span></p>
                             </div>
                         ))}
                     </div>
@@ -106,7 +103,6 @@ export default function AdminPayrollPage() {
                         <div style={{ marginBottom: '1rem', padding: '1rem', background: '#f5f5f5', borderRadius: '8px' }}>
                             <p><strong>Employee:</strong> {selectedTs.employeeName}</p>
                             <p><strong>Week Ending:</strong> {selectedTs.weekEnding}</p>
-                            <p><strong>Submitted:</strong> {new Date(selectedTs.submittedAt).toLocaleString()}</p>
                         </div>
 
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '2rem' }}>
@@ -116,61 +112,40 @@ export default function AdminPayrollPage() {
                                     <th style={{ padding: '8px' }}>Time</th>
                                     <th style={{ padding: '8px' }}>Break</th>
                                     <th style={{ padding: '8px' }}>Activity</th>
-                                    <th style={{ padding: '8px' }}>Flags</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {selectedTs.entries.map((entry, i) => (
+                                {selectedTs.entries.map((entry: any, i: number) => (
                                     <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
                                         <td style={{ padding: '8px' }}>{entry.date}</td>
                                         <td style={{ padding: '8px' }}>{entry.startTime} - {entry.endTime}</td>
                                         <td style={{ padding: '8px' }}>{entry.breakMinutes}m</td>
                                         <td style={{ padding: '8px' }}>{entry.activity}</td>
-                                        <td style={{ padding: '8px' }}>
-                                            {entry.isNightShift && <span style={{ marginRight: '5px' }}>🌙</span>}
-                                            {entry.isPublicHoliday && <span>🎉</span>}
-                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
 
                         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-                            <button className="btn btn-secondary" onClick={() => setSelectedTs(null)}>Cancel</button>
-                            <button className="btn btn-primary" onClick={() => handleProcess(selectedTs)}>✅ Approve & Generate PDF</button>
+                            <button className="btn btn-secondary" onClick={() => setSelectedTs(null)}>Close</button>
                         </div>
                     </div>
                 </div>
             )}
 
             <section>
-                <h2 className={styles.sectionTitle}>✅ Recently Processed</h2>
+                <h2 className={styles.sectionTitle}>✅ Processed / Finalized</h2>
                 <div className="card">
                     {approved.length === 0 ? (
-                        <p style={{ color: '#999' }}>No processed payments in this session.</p>
+                        <p style={{ color: '#999' }}>No processed payments yet.</p>
                     ) : (
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead>
-                                <tr style={{ textAlign: 'left', borderBottom: '2px solid #eee' }}>
-                                    <th style={{ padding: '0.5rem' }}>Employee</th>
-                                    <th style={{ padding: '0.5rem' }}>Date</th>
-                                    <th style={{ padding: '0.5rem' }}>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {approved.map(ts => (
-                                    <tr key={ts.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                                        <td style={{ padding: '0.8rem' }}>{ts.employeeName}</td>
-                                        <td style={{ padding: '0.8rem' }}>{ts.weekEnding}</td>
-                                        <td style={{ padding: '0.8rem' }}>
-                                            <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                                                APPROVED
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        <ul className={styles.infoList}>
+                            {approved.map((ts: any) => (
+                                <li key={ts.id} style={{ marginBottom: '0.5rem' }}>
+                                    {ts.employeeName} - {ts.weekEnding} (Status: {ts.status})
+                                </li>
+                            ))}
+                        </ul>
                     )}
                 </div>
             </section>
