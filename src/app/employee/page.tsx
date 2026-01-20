@@ -3,6 +3,7 @@ import Link from "next/link";
 import styles from "./employee.module.css";
 import LogoutButton from "../components/LogoutButton";
 import { getEmployeeDashboardData } from "@/lib/employee-actions";
+import Image from "next/image";
 
 export default async function EmployeeDashboard() {
     const data = await getEmployeeDashboardData();
@@ -10,8 +11,11 @@ export default async function EmployeeDashboard() {
     if (!data) {
         return (
             <div className="container">
-                <header className={styles.header}>
-                    <h1>My Profile at Budgalon</h1>
+                <header className="header">
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                        <Image src="/brand/logo.png" alt="Budgalong" width={100} height={100} />
+                    </div>
+                    <h1>Budgalong</h1>
                 </header>
                 <div className="card">
                     <p>Profile not found. Please contact administration.</p>
@@ -22,11 +26,14 @@ export default async function EmployeeDashboard() {
 
     return (
         <div className="container">
-            <header className={styles.header} style={{ position: 'relative' }}>
+            <header className="header" style={{ position: 'relative' }}>
                 <div style={{ position: 'absolute', top: '1rem', right: '0' }}>
                     <LogoutButton />
                 </div>
-                <h1>My Profile at Budgalon</h1>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                    <Image src="/brand/logo.png" alt="Budgalong" width={120} height={120} />
+                </div>
+                <h1>My Profile at Budgalong</h1>
             </header>
 
             <div className={styles.dashboardGrid}>

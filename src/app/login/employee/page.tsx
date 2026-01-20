@@ -3,29 +3,29 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
-import styles from "../../login/login.module.css";
+import styles from "../login.module.css";
 import { authenticate } from "@/lib/auth-actions";
 import Image from "next/image";
 
-export default function AdminLoginPage() {
+export default function LoginPage() {
     const [state, dispatch] = useActionState(authenticate, undefined);
 
     return (
         <div className="container flex-center" style={{ minHeight: '80vh' }}>
-            <div className="card" style={{ maxWidth: '400px', width: '100%', borderColor: 'var(--primary)' }}>
+            <div className="card" style={{ maxWidth: '400px', width: '100%' }}>
                 <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
                     <Image src="/brand/logo.png" alt="Budgalong" width={100} height={100} />
-                    <h2 style={{ marginTop: '0.5rem' }}>Admin Portal</h2>
-                    <p style={{ color: '#666', fontSize: '0.9rem' }}>Budgalong Management</p>
+                    <h2 style={{ marginTop: '0.5rem' }}>Employee Login</h2>
+                    <p style={{ color: '#666', fontSize: '0.9rem' }}>Budgalong</p>
                 </div>
 
                 <form action={dispatch} className={styles.form}>
                     <div className={styles.inputGroup}>
-                        <label>Admin Email</label>
+                        <label>Email Address</label>
                         <input
                             type="email"
                             name="email"
-                            placeholder="admin@local.dev"
+                            placeholder="name@budgalon.com"
                             defaultValue={state?.email}
                             required
                         />
@@ -57,7 +57,7 @@ function LoginButton() {
 
     return (
         <button className="btn btn-primary" aria-disabled={pending} disabled={pending} style={{ width: '100%', marginTop: '1rem' }}>
-            {pending ? 'Verifying...' : 'Access Dashboard'}
+            {pending ? 'Logging in...' : 'Login'}
         </button>
     );
 }

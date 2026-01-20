@@ -1,18 +1,17 @@
 :root {
   /* Cartoonish Palette */
-  --primary: #4CAF50;
-  /* Grass Green */
-  --primary-hover: #45a049;
-  --secondary: #FFC107;
-  /* Sun Yellow */
-  --accent: #FF5722;
-  /* Earth/Clay Red */
-  --background: #F0F4F8;
-  /* Soft Sky Blue/Gray */
-  --foreground: #2C3E50;
-  /* Darker Slate */
+  --primary: #5E7153;
+  /* Sage Green - Sophisticated & Calming */
+  --primary-hover: #4A5942;
+  --secondary: #D9D2B6;
+  /* Creamy Parchment - Warm & Classic */
+  --accent: #8E7B6D;
+  /* Warm Earth - Professional touch */
+  --background: #FDFBF7;
+  --foreground: #2D312B;
   --card-bg: #FFFFFF;
-  --wool-white: #FBFCFC;
+  --pixel-border: #1A1C19;
+  --wool-pattern: #E8E8E0;
 
   /* Styling Tokens */
   --radius-sm: 12px;
@@ -25,7 +24,7 @@
   --shadow-lg: 0 12px 0 rgba(0, 0, 0, 0.1);
 
   /* Fonts */
-  --font-main: var(--font-outfit), system-ui, sans-serif;
+  --font-main: var(--font-pixel), "Press Start 2P", cursive, sans-serif;
 }
 
 * {
@@ -34,8 +33,17 @@
   margin: 0;
 }
 
+img,
+Image {
+  image-rendering: pixelated;
+}
+
 body {
   background-color: var(--background);
+  background-image: url("/brand/wool-pixel.png");
+  background-repeat: repeat;
+  background-size: 100px;
+  /* Adjust for pixel feel */
   color: var(--foreground);
   font-family: var(--font-main);
   line-height: 1.6;
@@ -46,12 +54,12 @@ body {
 
 .card {
   background: var(--card-bg);
-  border-radius: var(--radius-md);
+  border-radius: 0;
+  /* Blocky GameBoy style */
   padding: 2rem;
-  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.1);
-  border: 3px solid #000;
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.2);
+  border: 4px solid #000;
   /* Thick border for caricature look */
-  transition: transform 0.1s ease;
 }
 
 .card:hover {
@@ -59,21 +67,7 @@ body {
   box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.15);
 }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.8rem 1.5rem;
-  border-radius: var(--radius-sm);
-  font-weight: 800;
-  cursor: pointer;
-  border: 3px solid #000;
-  /* Thick border */
-  transition: all 0.1s ease;
-  font-family: inherit;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
+/* Button styles moved down */
 
 a,
 button,
@@ -88,26 +82,77 @@ button:hover,
   text-decoration: none;
 }
 
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.8rem 1.5rem;
+  border-radius: 0;
+  /* Pixel style */
+  font-weight: 800;
+  cursor: pointer;
+  border: 4px solid #000;
+  /* Thick border */
+  transition: all 0.1s ease;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.4);
+  /* Inner shine/highlight */
+}
+
 .btn-primary {
   background: var(--primary);
   color: white;
-  box-shadow: 4px 4px 0 #1B5E20;
+  box-shadow: 4px 4px 0 #4A5942, inset -4px -4px 0 rgba(0, 0, 0, 0.2);
+}
+
+.btn-primary:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 #4A5942, inset -4px -4px 0 rgba(0, 0, 0, 0.2);
 }
 
 .btn-primary:active {
   transform: translate(2px, 2px);
-  box-shadow: 0px 0px 0 #1B5E20;
+  box-shadow: 0px 0px 0 #4A5942, inset -2px -2px 0 rgba(0, 0, 0, 0.2);
 }
 
 .btn-secondary {
   background: var(--secondary);
-  color: #000;
-  box-shadow: 4px 4px 0 #FF8F00;
+  color: #2D312B;
+  box-shadow: 4px 4px 0 #B5AD8F, inset -4px -4px 0 rgba(0, 0, 0, 0.1);
+}
+
+.btn-secondary:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 #B5AD8F, inset -4px -4px 0 rgba(0, 0, 0, 0.1);
 }
 
 .btn-secondary:active {
   transform: translate(2px, 2px);
-  box-shadow: 0px 0px 0 #FF8F00;
+  box-shadow: 0px 0px 0 #B5AD8F, inset -2px -2px 0 rgba(0, 0, 0, 0.1);
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 3rem;
+  padding: 2.5rem;
+  background: rgba(253, 251, 247, 0.85);
+  /* Darker/Warmer Parchment backdrop */
+  backdrop-filter: blur(8px);
+  border-bottom: 4px solid var(--pixel-border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
 h1,
@@ -116,6 +161,8 @@ h3 {
   font-weight: 900;
   color: var(--foreground);
   margin-bottom: 1rem;
+  text-shadow: 2px 2px 0 #FFF;
+  /* Better contrast against wool */
 }
 
 /* Layout Utilities */
@@ -135,4 +182,19 @@ h3 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 2rem;
+}
+
+/* Loading Spinner */
+.spinner {
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }

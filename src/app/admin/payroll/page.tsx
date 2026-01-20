@@ -5,6 +5,7 @@ import Link from "next/link";
 import styles from "./payroll.module.css";
 import { getTimesheets, getContracts } from "@/lib/actions";
 import { createPayRun } from "@/lib/payroll-actions";
+import Image from "next/image";
 
 export default function AdminPayrollPage() {
     const [timesheets, setTimesheets] = useState<any[]>([]);
@@ -47,7 +48,12 @@ export default function AdminPayrollPage() {
         }
     };
 
-    if (isLoading) return <div className="container" style={{ padding: '2rem' }}>Loading...</div>;
+    if (isLoading) return (
+        <div className="container flex-center" style={{ minHeight: '80vh', flexDirection: 'column' }}>
+            <Image src="/brand/logo.png" alt="Loading" width={100} height={100} className="spinner" style={{ borderRadius: '20px' }} />
+            <p style={{ marginTop: '2rem', color: '#666', fontWeight: 'bold' }}>Gathering Budgalong Payroll Data...</p>
+        </div>
+    );
 
     const pending = timesheets.filter(t => t.status === 'Pending' || t.status === 'submitted');
     const approved = timesheets.filter(t => t.status === 'Approved' || t.status === 'paid');

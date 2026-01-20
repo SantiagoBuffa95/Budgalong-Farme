@@ -3,18 +3,22 @@ import Link from "next/link";
 import styles from "./admin.module.css";
 import LogoutButton from "../components/LogoutButton";
 import { getAdminStats } from "@/lib/reports-actions";
+import Image from "next/image";
 
 export default async function AdminDashboard() {
     const stats = await getAdminStats();
 
     return (
         <div className="container">
-            <header className={styles.header} style={{ position: 'relative' }}>
+            <header className="header" style={{ position: 'relative' }}>
                 <div style={{ position: 'absolute', top: '1rem', right: '0' }}>
                     <LogoutButton />
                 </div>
-                <h1>Admin Dashboard</h1>
-                <p>Manage the legal and financial aspects of Budgalon</p>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                    <Image src="/brand/logo.png" alt="Budgalong" width={120} height={120} />
+                </div>
+                <h1>Budgalong Admin</h1>
+                <p>Management & Financial Operations</p>
             </header>
 
             <div className="grid-auto">

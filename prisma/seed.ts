@@ -19,28 +19,28 @@ async function main() {
   console.log("🌱 Starting seed...");
 
   // Farm (defaults are dev-safe; override via env)
-  const farmName = env("FARM_NAME", "Budgalong Station (Dev)")!;
+  const farmName = env("FARM_NAME", "Budgalong (Dev)")!;
   const farmAbn = env("FARM_ABN", "12 345 678 901")!;
   const farmAddress = env("FARM_ADDRESS", "123 Farm Lane, NSW 2000")!;
   const farmTimezone = env("FARM_TIMEZONE", "Australia/Sydney")!;
 
   let farm = await prisma.farm.findFirst({
-  where: { name: farmName },
-});
-
-if (!farm) {
-  farm = await prisma.farm.create({
-    data: {
-      name: farmName,
-      abn: farmAbn,
-      address: farmAddress,
-      timezone: farmTimezone,
-    },
+    where: { name: farmName },
   });
-  console.log(`✅ Farm created: ${farm.name} (${farm.id})`);
-} else {
-  console.log(`ℹ️ Farm already exists: ${farm.name} (${farm.id})`);
-};
+
+  if (!farm) {
+    farm = await prisma.farm.create({
+      data: {
+        name: farmName,
+        abn: farmAbn,
+        address: farmAddress,
+        timezone: farmTimezone,
+      },
+    });
+    console.log(`✅ Farm created: ${farm.name} (${farm.id})`);
+  } else {
+    console.log(`ℹ️ Farm already exists: ${farm.name} (${farm.id})`);
+  };
 
   console.log(`✅ Farm ready: ${farm.name} (${farm.id})`);
 

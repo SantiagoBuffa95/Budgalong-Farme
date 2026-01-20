@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import { Outfit } from "next/font/google";
+import { DotGothic16 } from "next/font/google";
 import "./globals.css";
 
-const outfit = Outfit({
-  variable: "--font-outfit",
+const dotGothic = DotGothic16({
+  weight: "400",
+  variable: "--font-pixel",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Rosi - Smart Farming",
-  description: "Staff management and payroll for Australian farms",
+  title: "Budgalong",
+  description: "Management and payroll for Budgalong station staff",
 };
 
 export default function RootLayout({
@@ -19,7 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={outfit.variable}>
+      <body className={dotGothic.variable}>
         {children}
       </body>
     </html>

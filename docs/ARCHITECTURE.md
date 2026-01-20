@@ -1,9 +1,9 @@
 # System Architecture (ARCHITECTURE.md)
 
-This document provides a high-level overview of the Rosi application's architecture and its core modules.
+This document provides a high-level overview of the Budgalong application's architecture and its core modules.
 
 ## Overview
-Rosi is a multi-tenant payroll and farm management system built with Next.js, Prisma, and Supabase.
+Budgalong is a multi-tenant payroll and farm management system built with Next.js, Prisma, and Supabase.
 
 ## Core Modules
 

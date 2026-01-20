@@ -54,14 +54,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                             console.error("Audit log error", e);
                         }
 
-                        return {
+                        const userData = {
                             id: user.id,
                             name: user.name,
                             email: user.email,
                             role: user.role,
                             farmId: user.farmId
                         };
+
+                        // Dev-only logging for debugging (no secrets)
+                        if (process.env.NODE_ENV === 'development') {
+                            console.log('✓ Auth success:', { email: user.email, role: user.role });
+                        }
+
+                        return userData;
                     }
+                }
+
+                // Dev-only logging for debugging
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('✗ Auth failed: Invalid credentials');
                 }
 
                 console.log("Invalid credentials");
