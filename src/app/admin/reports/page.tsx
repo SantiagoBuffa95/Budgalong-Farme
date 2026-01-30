@@ -6,7 +6,7 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import styles from "./reports.module.css";
 import { getTimesheets, getContracts } from "@/lib/actions";
-import { calculateWeeklyPay } from "@/lib/payroll";
+
 import { WeeklyTimesheet, Contract } from "@/lib/types";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -89,10 +89,11 @@ export default function ReportsPage() {
             grossPay = ts.financials.gross;
             superAmount = ts.financials.super;
         } else {
-            // Re-calculate pay for legacy timesheets
-            const pay = calculateWeeklyPay(contract, ts.entries);
-            grossPay = pay.grossPay;
-            superAmount = pay.superannuation;
+            // Fallback for legacy data without verified financials:
+            // We skipping re-calculation to avoid bundling legacy engine logic on client.
+            // Ideally, migrate legacy data to have financials.
+            grossPay = 0;
+            superAmount = 0;
         }
 
         // Sum it up

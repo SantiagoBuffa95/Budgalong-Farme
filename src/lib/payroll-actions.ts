@@ -3,6 +3,7 @@
 import prisma from '@/lib/prisma';
 import { auth } from '@/auth';
 import { getSessionFarmIdOrThrow, logAudit, ensureAdmin, ensureEmployeeAccess } from '@/lib/auth-helpers';
+import { z } from "zod";
 import { computePay, TimesheetEntryInput, ContractInput, TAX_BRACKETS_2025 } from './payroll/engine';
 import { generatePayslipPdf } from './pdf-service';
 import { uploadPayslip } from './storage-service';
@@ -144,7 +145,7 @@ export async function createPayRun(periodStart: Date, periodEnd: Date) {
                     net: result.net,
                     lines: result.lines,
                     baseRate: contractInput.baseRateHourly,
-                    totalHours: result.lines.filter(l => l.code === 'ORD').reduce((sum, l) => sum + l.units, 0)
+                    totalHours: result.lines.reduce((sum, l) => sum + l.units, 0)
                 });
 
                 const fileName = `${farmId}/${payRun.id}/${payslip.id}.pdf`;
@@ -326,7 +327,8 @@ export async function processSingleTimesheet(timesheetId: string) {
                 net: result.net,
                 lines: result.lines,
                 baseRate: contractInput.baseRateHourly,
-                totalHours: result.lines.filter(l => l.code === 'ORD').reduce((sum, l) => sum + l.units, 0)
+                // Sum all units (Ordinary + OT + Etc) for "Hours Paid"
+                totalHours: result.lines.reduce((sum, l) => sum + l.units, 0)
             });
 
             const fileName = `${farmId}/${payRun.id}/${payslip.id}.pdf`;
@@ -339,7 +341,8 @@ export async function processSingleTimesheet(timesheetId: string) {
                 });
             }
         } catch (pdfError) {
-            console.error("PDF Fail:", pdfError);
+            console.error("PDF Generation/Upload Failed:", pdfError);
+            // We do not roll back the Pay Run, but PDF is missing.
         }
 
         // 6. Update Timesheet Status
@@ -531,7 +534,7 @@ export async function regeneratePayslipPdf(timesheetId: string) {
             net: Number(payslip.net),
             lines: lines,
             baseRate: baseRate,
-            totalHours: lines.filter(l => l.code === 'ORD').reduce((sum, l) => sum + l.units, 0)
+            totalHours: lines.reduce((sum, l) => sum + l.units, 0)
         });
 
         // Convert to Base64
@@ -616,6 +619,78 @@ export async function previewPay(entries: TimesheetEntryInput[], employeeId: str
 
     } catch (error: any) {
         console.error("Preview Pay Error:", error);
+        return { success: false, message: error.message };
+    }
+}
+// --- Zod Schema for Calculator ---
+const CalculatorSchema = z.object({
+    contract: z.object({
+        type: z.enum(["full_time", "part_time", "casual", "salary", "contractor"]),
+        baseRate: z.number().min(0),
+        salaryAnnual: z.number().optional(),
+        classification: z.string().optional(),
+        ordinaryHoursPerWeek: z.number().default(38),
+        overtimeMode: z.enum(["award_default", "flat_rate"]).default("award_default"),
+    }),
+    entries: z.array(z.object({
+        date: z.string(), // YYYY-MM-DD
+        startTime: z.string(), // HH:mm
+        endTime: z.string(), // HH:mm
+        breakMinutes: z.number().default(0),
+        isNightShift: z.boolean().default(false),
+        isPublicHoliday: z.boolean().default(false),
+    }))
+});
+
+export async function previewPayrollCalculation(input: any) {
+    try {
+        await ensureAdmin(); // Security: Admin Only
+
+        // Validate Input
+        const data = CalculatorSchema.parse(input);
+
+        // Map to Engine Types
+        const contractInput: ContractInput = {
+            baseRateHourly: data.contract.baseRate,
+            ordinaryHoursPerWeek: data.contract.ordinaryHoursPerWeek,
+            classification: data.contract.classification || 'Standard',
+            overtimeMode: data.contract.overtimeMode,
+            type: data.contract.type,
+            salaryAnnual: data.contract.salaryAnnual || 0
+        };
+
+        const entryInputs: TimesheetEntryInput[] = data.entries.map(e => {
+            const date = new Date(e.date);
+            const start = new Date(`${e.date}T${e.startTime}:00`);
+            let end = new Date(`${e.date}T${e.endTime}:00`);
+
+            // Handle overnight
+            if (end < start) {
+                end.setDate(end.getDate() + 1);
+            }
+
+            return {
+                date: date,
+                startTime: start,
+                endTime: end,
+                breakMinutes: e.breakMinutes,
+                taskCode: 'general' // Default
+            };
+        });
+
+        // Determine PH Dates Manually based on input flag
+        // In this calculator mode, we trust the "isPublicHoliday" flag from the UI rather than DB lookup
+        // because it's a "What If" scenario.
+        const phDates: string[] = data.entries
+            .filter(e => e.isPublicHoliday)
+            .map(e => e.date);
+
+        const result = computePay(entryInputs, contractInput, phDates);
+
+        return { success: true, result };
+
+    } catch (error: any) {
+        console.error("Calculator Error:", error);
         return { success: false, message: error.message };
     }
 }

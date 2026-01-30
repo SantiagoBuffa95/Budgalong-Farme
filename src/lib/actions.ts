@@ -4,6 +4,7 @@ import { NewContractData, Contract as ContractType, WeeklyTimesheet } from './ty
 import prisma from '@/lib/prisma';
 import { getSessionFarmIdOrThrow, ensureAdmin, logAudit } from '@/lib/auth-helpers';
 import bcrypt from 'bcryptjs';
+import { computePay } from './payroll/engine';
 
 // --- CONTRACTS ---
 
@@ -201,8 +202,7 @@ export async function saveTimesheet(data: any): Promise<{ success: boolean; mess
 
         if (contract) {
             try {
-                // Import locally to avoid circular dependency issues if any
-                const { computePay, ContractInput, TAX_BRACKETS_2025 } = require('./payroll/engine');
+
 
                 // Helper to get PH dates - simplified for speed, ideally should fetch real calendar
                 // For MVP, we pass empty PH on submission or fetch quickly.
@@ -223,7 +223,7 @@ export async function saveTimesheet(data: any): Promise<{ success: boolean; mess
                     baseRateHourly: Number(contract.baseRateHourly) || 0,
                     ordinaryHoursPerWeek: Number(contract.ordinaryHoursPerWeek) || 38,
                     classification: contract.classification || 'Level 1',
-                    overtimeMode: contract.overtimeMode === 'flat_rate' ? 'flat_rate' : 'award_default',
+                    overtimeMode: (contract.overtimeMode === 'flat_rate' ? 'flat_rate' : 'award_default') as 'flat_rate' | 'award_default',
                     type: contract.type,
                     salaryAnnual: Number(contract.salaryAnnual) || 0
                 };

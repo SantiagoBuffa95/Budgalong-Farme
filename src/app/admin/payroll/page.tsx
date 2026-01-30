@@ -116,7 +116,10 @@ export default function AdminPayrollPage() {
     return (
         <div className="container">
             <header className={styles.header}>
-                <Link href="/admin" className="btn btn-secondary">← Back to Home</Link>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                    <Link href="/admin" className="btn btn-secondary">← Back to Home</Link>
+                    <Link href="/admin/payroll/calculator" className="btn btn-secondary" style={{ background: '#e0f7fa', color: '#006064', borderColor: '#b2ebf2' }}>🧮 Calculator Preview</Link>
+                </div>
                 <h1>Weekly Payroll Processing</h1>
                 <p>Review and approve weekly hours submitted by staff.</p>
             </header>
