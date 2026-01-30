@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import styles from "./payroll.module.css";
-import { getTimesheets, getContracts } from "@/lib/actions";
-import { createPayRun } from "@/lib/payroll-actions";
+import { getTimesheets } from "@/lib/actions";
+import { processSingleTimesheet, rejectTimesheet, regeneratePayslipPdf } from "@/lib/payroll-actions";
 import Image from "next/image";
 
 export default function AdminPayrollPage() {
@@ -22,30 +22,84 @@ export default function AdminPayrollPage() {
         load();
     }, []);
 
-    const handleProcessAll = async () => {
-        if (!confirm("Start Pay Run for all approved timesheets?")) return;
+
+
+    const handleApproveAndPay = async () => {
+        if (!selectedTs) return;
+        if (!confirm(`Confirm Pay Run for ${selectedTs.employeeName}? This will generate a payslip and mark as paid.`)) return;
 
         setIsProcessing(true);
         try {
-            // MVP: Using a fixed period for demo, usually controlled by date picker
-            const start = new Date();
-            start.setDate(start.getDate() - 7);
-            const end = new Date();
-
-            const result = await createPayRun(start, end);
+            const result = await processSingleTimesheet(selectedTs.id);
             if (result.success) {
-                alert(`Pay Run successful! Created ${result.count} payslips.`);
-                // Refresh data
-                const tsData = await getTimesheets();
-                setTimesheets(tsData);
+                alert(result.message);
+                setSelectedTs(null);
+                refresh();
             } else {
                 alert("Error: " + result.message);
             }
         } catch (err) {
-            alert("Processing failed.");
+            alert("Approval failed.");
         } finally {
             setIsProcessing(false);
         }
+    };
+
+    const handleReject = async () => {
+        if (!selectedTs) return;
+        if (!confirm(`Reject timesheet for ${selectedTs.employeeName}? They will need to correct and resubmit.`)) return;
+
+        setIsProcessing(true);
+        try {
+            const result = await rejectTimesheet(selectedTs.id);
+            if (result.success) {
+                alert(result.message);
+                setSelectedTs(null);
+                refresh();
+            } else {
+                alert("Error: " + result.message);
+            }
+        } catch (err) {
+            alert("Rejection failed.");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleDownload = async (tsId: string, employeeName: string) => {
+        setIsProcessing(true);
+        try {
+            const res = await regeneratePayslipPdf(tsId);
+            if (res.success && res.pdfBase64) {
+                const byteCharacters = atob(res.pdfBase64);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: 'application/pdf' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Payslip_${employeeName}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } else {
+                alert("Failed to download: " + (res.message || "Unknown error"));
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Download error");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const refresh = async () => {
+        const tsData = await getTimesheets();
+        setTimesheets(tsData);
     };
 
     if (isLoading) return (
@@ -55,24 +109,16 @@ export default function AdminPayrollPage() {
         </div>
     );
 
-    const pending = timesheets.filter(t => t.status === 'Pending' || t.status === 'submitted');
-    const approved = timesheets.filter(t => t.status === 'Approved' || t.status === 'paid');
+    const pending = timesheets.filter(t => t.status === 'Pending');
+    const processed = timesheets.filter(t => t.status === 'Paid' || t.status === 'Approved');
+    const rejected = timesheets.filter(t => t.status === 'Rejected');
 
     return (
         <div className="container">
             <header className={styles.header}>
-                <Link href="/admin" className={styles.backLink}>← Back to Home</Link>
+                <Link href="/admin" className="btn btn-secondary">← Back to Home</Link>
                 <h1>Weekly Payroll Processing</h1>
                 <p>Review and approve weekly hours submitted by staff.</p>
-                <div style={{ marginTop: '1rem' }}>
-                    <button
-                        className="btn btn-primary"
-                        onClick={handleProcessAll}
-                        disabled={isProcessing || pending.length === 0}
-                    >
-                        {isProcessing ? 'Processing...' : `🚀 Start Pay Run for ${pending.length} Staff`}
-                    </button>
-                </div>
             </header>
 
             <section style={{ marginBottom: '3rem' }}>
@@ -94,6 +140,21 @@ export default function AdminPayrollPage() {
                 )}
             </section>
 
+            {rejected.length > 0 && (
+                <section style={{ marginBottom: '3rem' }}>
+                    <h2 className={styles.sectionTitle}>🔴 Rejected / Returned ({rejected.length})</h2>
+                    <div className="grid-auto">
+                        {rejected.map((ts: any) => (
+                            <div key={ts.id} className="card" style={{ opacity: 0.7 }}>
+                                <h3>{ts.employeeName}</h3>
+                                <p>Week Ending: {ts.weekEnding}</p>
+                                <p>Status: <span style={{ color: 'red' }}>Rejected</span></p>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
+
             {/* Modal for Details */}
             {selectedTs && (
                 <div style={{
@@ -110,6 +171,41 @@ export default function AdminPayrollPage() {
                             <p><strong>Employee:</strong> {selectedTs.employeeName}</p>
                             <p><strong>Week Ending:</strong> {selectedTs.weekEnding}</p>
                         </div>
+
+                        {/* Cost Estimator Box */}
+                        <div style={{ marginBottom: '2rem', padding: '1.5rem', border: '2px solid #ddd', borderRadius: '8px', background: '#fff' }}>
+                            <h3 style={{ margin: '0 0 1rem 0', color: '#555', fontSize: '1.1rem' }}>💰 Pay Run Details</h3>
+
+                            {selectedTs.financials && selectedTs.financials.gross > 0 ? (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '2rem' }}>
+                                    <div>
+                                        <div style={{ fontSize: '0.9rem', color: '#666' }}>Gross Pay</div>
+                                        <div style={{ fontSize: '1.4rem', fontWeight: 'bold' }}>${selectedTs.financials.gross.toFixed(2)}</div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '0.9rem', color: '#666' }}>Superannuation</div>
+                                        <div style={{ fontSize: '1.4rem', fontWeight: 'bold' }}>${selectedTs.financials.super.toFixed(2)}</div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '0.9rem', color: '#666' }}>Tax (PAYG)</div>
+                                        <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#d32f2f' }}>${selectedTs.financials.tax.toFixed(2)}</div>
+                                    </div>
+                                    <div style={{ paddingLeft: '1rem', borderLeft: '2px solid #eee' }}>
+                                        <div style={{ fontSize: '0.9rem', color: '#666' }}>Net Pay</div>
+                                        <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)' }}>
+                                            ${selectedTs.financials.net.toFixed(2)}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p style={{ color: '#888', fontStyle: 'italic' }}>
+                                    Legacy timesheet (no financial snapshot saved). <br />
+                                    <small>Numbers will be calculated upon approval.</small>
+                                </p>
+                            )}
+                        </div>
+
+
 
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '2rem' }}>
                             <thead>
@@ -132,8 +228,25 @@ export default function AdminPayrollPage() {
                             </tbody>
                         </table>
 
-                        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-                            <button className="btn btn-secondary" onClick={() => setSelectedTs(null)}>Close</button>
+                        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '2rem' }}>
+                            <button className="btn btn-secondary" onClick={() => setSelectedTs(null)} disabled={isProcessing}>Close</button>
+
+                            {selectedTs.status === 'Pending' && (
+                                <button
+                                    className="btn"
+                                    onClick={handleReject}
+                                    disabled={isProcessing}
+                                    style={{ background: '#d32f2f', color: 'white', border: 'none' }}
+                                >
+                                    Reject & Return
+                                </button>
+                            )}
+
+                            {selectedTs.status === 'Pending' && (
+                                <button className="btn btn-primary" onClick={handleApproveAndPay} disabled={isProcessing}>
+                                    {isProcessing ? 'Processing...' : 'Approve & Pay (Generate Slip)'}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -142,13 +255,21 @@ export default function AdminPayrollPage() {
             <section>
                 <h2 className={styles.sectionTitle}>✅ Processed / Finalized</h2>
                 <div className="card">
-                    {approved.length === 0 ? (
+                    {processed.length === 0 ? (
                         <p style={{ color: '#999' }}>No processed payments yet.</p>
                     ) : (
                         <ul className={styles.infoList}>
-                            {approved.map((ts: any) => (
-                                <li key={ts.id} style={{ marginBottom: '0.5rem' }}>
-                                    {ts.employeeName} - {ts.weekEnding} (Status: {ts.status})
+                            {processed.map((ts: any) => (
+                                <li key={ts.id} style={{ marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>{ts.employeeName} - {ts.weekEnding} (Status: {ts.status})</span>
+                                    <button
+                                        className="btn-sm"
+                                        onClick={() => handleDownload(ts.id, ts.employeeName)}
+                                        style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '0.25rem 0.7rem', borderRadius: '4px', cursor: 'pointer' }}
+                                        disabled={isProcessing}
+                                    >
+                                        📥 Download PDF
+                                    </button>
                                 </li>
                             ))}
                         </ul>

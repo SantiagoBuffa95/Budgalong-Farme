@@ -1,9 +1,9 @@
-export const dynamic = "force-dynamic";
 import Link from "next/link";
 import styles from "./employee.module.css";
 import LogoutButton from "../components/LogoutButton";
 import { getEmployeeDashboardData } from "@/lib/employee-actions";
 import Image from "next/image";
+import DownloadPayslipButton from "./DownloadPayslipButton";
 
 export default async function EmployeeDashboard() {
     const data = await getEmployeeDashboardData();
@@ -62,10 +62,10 @@ export default async function EmployeeDashboard() {
                             {data.recentPayslips.map(ps => (
                                 <li key={ps.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                     <span>Pay Ending: {ps.payRunEnd} (${ps.net.toFixed(2)})</span>
-                                    {ps.pdfUrl ? (
-                                        <a href={ps.pdfUrl} target="_blank" className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: '0.7rem' }}>Download</a>
+                                    {ps.timesheetId ? (
+                                        <DownloadPayslipButton timesheetId={ps.timesheetId} />
                                     ) : (
-                                        <span style={{ fontSize: '0.7rem', color: '#666' }}>Processing...</span>
+                                        <span style={{ fontSize: '0.7rem', color: '#666' }}>No timesheet</span>
                                     )}
                                 </li>
                             ))}

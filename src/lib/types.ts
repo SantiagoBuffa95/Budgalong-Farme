@@ -4,9 +4,10 @@ export interface Contract {
     firstName: string;
     lastName: string;
     email: string;
-    type: 'employee' | 'contractor';
+    type: 'full_time' | 'part_time' | 'casual' | 'salary' | 'contractor';
     classification: string;
     baseRate: number;
+    salaryAnnual?: number;
     superannuation: boolean;
     allowances: {
         dog: boolean;
@@ -58,4 +59,10 @@ export interface WeeklyTimesheet {
     entries: TimesheetEntry[];
     status: 'Pending' | 'Approved' | 'Paid';
     submittedAt: string;
+    financials?: {
+        gross: number;
+        tax: number;
+        super: number;
+        net: number;
+    };
 }

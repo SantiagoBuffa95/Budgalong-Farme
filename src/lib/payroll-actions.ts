@@ -1,14 +1,20 @@
 'use server';
 
 import prisma from '@/lib/prisma';
-import { getSessionFarmIdOrThrow, logAudit } from '@/lib/auth-helpers';
+import { auth } from '@/auth';
+import { getSessionFarmIdOrThrow, logAudit, ensureAdmin, ensureEmployeeAccess } from '@/lib/auth-helpers';
 import { computePay, TimesheetEntryInput, ContractInput, TAX_BRACKETS_2025 } from './payroll/engine';
 import { generatePayslipPdf } from './pdf-service';
 import { uploadPayslip } from './storage-service';
 
 export async function createPayRun(periodStart: Date, periodEnd: Date) {
     try {
+        await ensureAdmin();
         const { farmId, userId } = await getSessionFarmIdOrThrow();
+
+        // Fetch Farm Details
+        const farm = await prisma.farm.findUnique({ where: { id: farmId } });
+        if (!farm) throw new Error("Farm not found");
 
         // 1. Create Draft Pay Run
         const payRun = await prisma.payRun.create({
@@ -58,7 +64,9 @@ export async function createPayRun(periodStart: Date, periodEnd: Date) {
                 baseRateHourly: Number(contract.baseRateHourly) || 0,
                 ordinaryHoursPerWeek: Number(contract.ordinaryHoursPerWeek) || 38,
                 classification: contract.classification || 'Level 1',
-                overtimeMode: contract.overtimeMode === 'flat_rate' ? 'flat_rate' : 'award_default'
+                overtimeMode: contract.overtimeMode === 'flat_rate' ? 'flat_rate' : 'award_default',
+                type: contract.type,
+                salaryAnnual: Number(contract.salaryAnnual) || 0
             };
 
             // Flatten Timesheet Entries
@@ -111,9 +119,22 @@ export async function createPayRun(periodStart: Date, periodEnd: Date) {
 
             // --- Generate PDF & Upload ---
             try {
+
+                // Fetch latest employee data including sensitive fields
+                const fullEmployee = await prisma.employee.findUnique({
+                    where: { id: emp.id },
+                    include: { superFund: true }
+                });
+
                 const pdfBuffer = await generatePayslipPdf({
                     id: payslip.id,
+                    farmName: farm.name || 'My Farm',
+                    farmAbn: farm.abn || undefined,
                     employeeName: emp.preferredName || emp.legalName,
+                    employeeAddress: fullEmployee?.address ? `${fullEmployee.address}, ${fullEmployee.suburb || ''} ${fullEmployee.state || ''} ${fullEmployee.postcode || ''}` : undefined,
+                    tfn: fullEmployee?.tfn || undefined,
+                    superFundName: fullEmployee?.superFund?.fundName || undefined,
+                    superMemberId: fullEmployee?.superFund?.memberNumber || undefined,
                     payRunStart: periodStart.toISOString().split('T')[0],
                     payRunEnd: periodEnd.toISOString().split('T')[0],
                     payDate: new Date().toISOString().split('T')[0],
@@ -121,7 +142,9 @@ export async function createPayRun(periodStart: Date, periodEnd: Date) {
                     tax: result.tax,
                     super: result.super,
                     net: result.net,
-                    lines: result.lines
+                    lines: result.lines,
+                    baseRate: contractInput.baseRateHourly,
+                    totalHours: result.lines.filter(l => l.code === 'ORD').reduce((sum, l) => sum + l.units, 0)
                 });
 
                 const fileName = `${farmId}/${payRun.id}/${payslip.id}.pdf`;
@@ -135,7 +158,6 @@ export async function createPayRun(periodStart: Date, periodEnd: Date) {
                 }
             } catch (pdfError) {
                 console.error("PDF Gen Failed for", emp.id, pdfError);
-                // Non-blocking failure
             }
 
             // --- Leave Accrual (Annual Leave) ---
@@ -187,5 +209,413 @@ export async function createPayRun(periodStart: Date, periodEnd: Date) {
     } catch (error) {
         console.error("Create PayRun Error", error);
         return { success: false, message: 'Database error' };
+    }
+}
+
+export async function processSingleTimesheet(timesheetId: string) {
+    try {
+        await ensureAdmin();
+        const { farmId, userId } = await getSessionFarmIdOrThrow();
+
+        // Fetch Farm Details
+        const farm = await prisma.farm.findUnique({ where: { id: farmId } });
+        if (!farm) return { success: false, message: "Farm not found" };
+
+        // 1. Fetch Timesheet with Employee and Contract
+        const timesheet = await prisma.timesheet.findUnique({
+            where: { id: timesheetId, farmId },
+            include: {
+                employee: {
+                    include: {
+                        contracts: {
+                            where: { status: 'active' },
+                            orderBy: { createdAt: 'desc' },
+                            take: 1
+                        },
+                        superFund: true
+                    }
+                },
+                entries: true
+            }
+        });
+
+        if (!timesheet || !timesheet.employee) {
+            return { success: false, message: "Timesheet not found" };
+        }
+
+        const contract = timesheet.employee.contracts[0];
+        if (!contract) {
+            return { success: false, message: "Employee has no active contract" };
+        }
+
+        // 2. Create Pay Run (Single)
+        const payRun = await prisma.payRun.create({
+            data: {
+                farmId,
+                periodStart: timesheet.weekStartDate,
+                periodEnd: timesheet.weekEndDate,
+                status: 'completed', // Direct to completed
+                createdBy: userId,
+            }
+        });
+
+        // 3. Compute Pay
+        const contractInput: ContractInput = {
+            baseRateHourly: Number(contract.baseRateHourly) || 0,
+            ordinaryHoursPerWeek: Number(contract.ordinaryHoursPerWeek) || 38,
+            classification: contract.classification || 'Level 1',
+            overtimeMode: contract.overtimeMode === 'flat_rate' ? 'flat_rate' : 'award_default',
+            type: contract.type,
+            salaryAnnual: Number(contract.salaryAnnual) || 0
+        };
+
+        const entries: TimesheetEntryInput[] = timesheet.entries.map(e => ({
+            date: e.date,
+            startTime: e.startTime,
+            endTime: e.endTime,
+            breakMinutes: e.breakMinutes,
+            taskCode: e.taskCode || undefined
+        }));
+
+        // Fetch Public Holidays
+        const publicHolidays = await prisma.holidayCalendar.findMany({
+            where: {
+                OR: [{ farmId }, { farmId: null }],
+                date: { gte: timesheet.weekStartDate, lte: timesheet.weekEndDate },
+                type: { in: ['public_holiday', 'local_public_holiday'] }
+            }
+        });
+        const phDates = publicHolidays.map(ph => ph.date.toISOString().split('T')[0]);
+
+        const result = computePay(entries, contractInput, phDates);
+
+        // 4. Create Payslip
+        const payslip = await prisma.payslip.create({
+            data: {
+                farmId,
+                payRunId: payRun.id,
+                employeeId: timesheet.employeeId,
+                gross: result.gross,
+                net: result.net,
+                tax: result.tax,
+                super_: result.super,
+                allowancesTotal: 0,
+                deductionsTotal: 0,
+            }
+        });
+
+        // 5. PDF & Upload
+        let pdfUrl: string | null = null;
+        try {
+            const emp = timesheet.employee;
+            const pdfBuffer = await generatePayslipPdf({
+                id: payslip.id,
+                farmName: farm.name || 'My Farm',
+                farmAbn: farm.abn || undefined,
+                employeeName: emp.preferredName || emp.legalName,
+                employeeAddress: emp.address ? `${emp.address}, ${emp.suburb || ''} ${emp.state || ''} ${emp.postcode || ''}` : undefined,
+                tfn: emp.tfn || undefined,
+                superFundName: emp.superFund?.fundName || undefined,
+                superMemberId: emp.superFund?.memberNumber || undefined,
+                payRunStart: timesheet.weekStartDate.toISOString().split('T')[0],
+                payRunEnd: timesheet.weekEndDate.toISOString().split('T')[0],
+                payDate: new Date().toISOString().split('T')[0],
+                gross: result.gross,
+                tax: result.tax,
+                super: result.super,
+                net: result.net,
+                lines: result.lines,
+                baseRate: contractInput.baseRateHourly,
+                totalHours: result.lines.filter(l => l.code === 'ORD').reduce((sum, l) => sum + l.units, 0)
+            });
+
+            const fileName = `${farmId}/${payRun.id}/${payslip.id}.pdf`;
+            pdfUrl = await uploadPayslip(fileName, pdfBuffer);
+
+            if (pdfUrl) {
+                await prisma.payslip.update({
+                    where: { id: payslip.id },
+                    data: { pdfUrl }
+                });
+            }
+        } catch (pdfError) {
+            console.error("PDF Fail:", pdfError);
+        }
+
+        // 6. Update Timesheet Status
+        await prisma.timesheet.update({
+            where: { id: timesheetId },
+            data: {
+                status: 'paid',
+                approvedAt: new Date()
+            }
+        });
+
+        // 7. Accrual
+        try {
+            const weeklyAccrual = (result.lines.find(l => l.code === 'ORD')?.units || 0) / 38 * 2.923;
+            if (weeklyAccrual > 0) {
+                await prisma.leaveBalance.upsert({
+                    where: { employeeId: timesheet.employeeId },
+                    update: {
+                        annualLeaveHours: { increment: weeklyAccrual },
+                        lastAccrualAt: new Date()
+                    },
+                    create: {
+                        farmId,
+                        employeeId: timesheet.employeeId,
+                        annualLeaveHours: weeklyAccrual,
+                        lastAccrualAt: new Date()
+                    }
+                });
+            }
+        } catch (e) {
+            console.error(e);
+        }
+
+        await logAudit('PAY_RUN_CREATED', userId, farmId, { payRunId: payRun.id, type: 'single' });
+
+        return { success: true, message: "Payslip generated and timesheet paid!", pdfUrl };
+
+    } catch (error: any) {
+        console.error("Single PayRun Error:", error);
+        return { success: false, message: error.message || 'Database error' };
+    }
+}
+
+export async function rejectTimesheet(timesheetId: string, reason?: string) {
+    try {
+        await ensureAdmin();
+        const { farmId, userId } = await getSessionFarmIdOrThrow();
+
+        // Verify existence
+        const ts = await prisma.timesheet.findUnique({
+            where: { id: timesheetId, farmId }
+        });
+
+        if (!ts) return { success: false, message: "Timesheet not found" };
+
+        await prisma.timesheet.update({
+            where: { id: timesheetId },
+            data: {
+                status: 'rejected',
+            }
+        });
+
+        await logAudit('TIMESHEET_REJECTED', userId, farmId, { timesheetId, reason });
+
+        return { success: true, message: "Timesheet returned to employee." };
+    } catch (error: any) {
+        console.error("Reject Error:", error);
+        return { success: false, message: "Database error" };
+    }
+}
+
+export async function regeneratePayslipPdf(timesheetId: string) {
+    try {
+        console.log('[PDF] Starting regeneration for timesheet:', timesheetId);
+        const { farmId, userId } = await getSessionFarmIdOrThrow();
+
+        // Find Timesheet to get dates and employee and ENTRIES
+        const ts = await prisma.timesheet.findUnique({
+            where: { id: timesheetId, farmId },
+            include: {
+                entries: true
+            }
+        });
+        if (!ts) {
+            return { success: false, message: "Timesheet not found" };
+        }
+
+        // Find payslip
+        const payslip = await prisma.payslip.findFirst({
+            where: {
+                employeeId: ts.employeeId,
+                farmId,
+                payRun: {
+                    periodStart: ts.weekStartDate,
+                    periodEnd: ts.weekEndDate
+                }
+            },
+            include: {
+                employee: {
+                    include: {
+                        user: true, // Needed for security check
+                        superFund: true,
+                        contracts: {
+                            orderBy: { createdAt: 'desc' },
+                            take: 5
+                        }
+                    }
+                },
+                payRun: true
+            }
+        });
+
+        if (!payslip) {
+            return { success: false, message: "Payslip not found" };
+        }
+
+        // Security Check: Admin or the Employee themselves
+        if (payslip.employee.user?.id) {
+            await ensureEmployeeAccess(payslip.employee.user.id);
+        } else {
+            // If no user linked, fallback to admin only for safety
+            await ensureAdmin();
+        }
+
+        // Re-construct Lines via ComputePay
+        // This ensures the PDF has the breakdown even if we didn't store lines in DB
+        let lines: any[] = [];
+        let baseRate = 0;
+
+        const emp = payslip.employee;
+
+        // Find contract used (approximate by finding active or latest)
+        let contract = emp.contracts.find(c => c.status.toLowerCase() === 'active');
+        if (!contract && emp.contracts.length > 0) contract = emp.contracts[0];
+
+        if (contract) {
+            const contractInput: ContractInput = {
+                baseRateHourly: Number(contract.baseRateHourly) || 0,
+                ordinaryHoursPerWeek: Number(contract.ordinaryHoursPerWeek) || 38,
+                classification: contract.classification || 'Level 1',
+                overtimeMode: contract.overtimeMode === 'flat_rate' ? 'flat_rate' : 'award_default',
+                type: contract.type,
+                salaryAnnual: Number(contract.salaryAnnual) || 0
+            };
+            baseRate = contractInput.baseRateHourly;
+
+            const entryInputs: TimesheetEntryInput[] = ts.entries.map(e => ({
+                date: e.date,
+                startTime: e.startTime,
+                endTime: e.endTime,
+                breakMinutes: e.breakMinutes,
+                taskCode: e.taskCode || undefined
+            }));
+
+            // Fetch Public Holidays
+            const publicHolidays = await prisma.holidayCalendar.findMany({
+                where: {
+                    OR: [{ farmId }, { farmId: null }],
+                    date: { gte: ts.weekStartDate, lte: ts.weekEndDate },
+                    type: { in: ['public_holiday', 'local_public_holiday'] }
+                }
+            });
+            const phDates = publicHolidays.map(ph => ph.date.toISOString().split('T')[0]);
+
+            const result = computePay(entryInputs, contractInput, phDates);
+            lines = result.lines;
+        }
+
+        // Fetch Farm Details
+        const farm = await prisma.farm.findUnique({ where: { id: farmId } });
+
+        console.log('[PDF] Generating PDF with lines:', lines.length);
+
+        const pdfBuffer = await generatePayslipPdf({
+            id: payslip.id,
+            farmName: farm?.name || 'My Farm',
+            farmAbn: farm?.abn || undefined,
+            employeeName: emp.preferredName || emp.legalName,
+            employeeAddress: emp.address ? `${emp.address}, ${emp.suburb || ''} ${emp.state || ''} ${emp.postcode || ''}` : undefined,
+            tfn: emp.tfn || undefined,
+            superFundName: emp.superFund?.fundName || undefined,
+            superMemberId: emp.superFund?.memberNumber || undefined,
+            payRunStart: payslip.payRun.periodStart.toISOString().split('T')[0],
+            payRunEnd: payslip.payRun.periodEnd.toISOString().split('T')[0],
+            payDate: payslip.issuedAt.toISOString().split('T')[0],
+            gross: Number(payslip.gross),
+            tax: Number(payslip.tax),
+            super: Number(payslip.super_),
+            net: Number(payslip.net),
+            lines: lines,
+            baseRate: baseRate,
+            totalHours: lines.filter(l => l.code === 'ORD').reduce((sum, l) => sum + l.units, 0)
+        });
+
+        // Convert to Base64
+        const base64 = Buffer.from(pdfBuffer).toString('base64');
+        return { success: true, pdfBase64: base64 };
+
+    } catch (error: any) {
+        console.error("[PDF] Regen PDF Error:", error);
+        return { success: false, message: `Generation failed: ${error.message}` };
+    }
+}
+
+export async function previewPay(entries: TimesheetEntryInput[], employeeId: string) {
+    try {
+        const { farmId } = await getSessionFarmIdOrThrow();
+
+        // 1. Fetch Employee Contract
+        const employee = await prisma.employee.findUnique({
+            where: { id: employeeId, farmId },
+            include: {
+                user: true, // Needed for security check
+                contracts: {
+                    orderBy: { createdAt: 'desc' },
+                    take: 5 // Fetch recent few to find the active one
+                }
+            }
+        });
+
+        if (!employee) return { success: false, message: "Employee not found" };
+
+        // Security Check
+        if (employee.user?.id) {
+            await ensureEmployeeAccess(employee.user.id);
+        } else {
+            await ensureAdmin();
+        }
+
+        // Find active contract (case insensitive) -> Priority
+        let contract = employee.contracts.find(c => c.status.toLowerCase() === 'active');
+
+        // Fallback: Use the most recent contract regardless of status (for estimation purposes)
+        if (!contract && employee.contracts.length > 0) {
+            console.warn(`[PreviewPay] No active contract found for ${employeeId}. Using latest available (${employee.contracts[0].status}).`);
+            contract = employee.contracts[0];
+        }
+
+        if (!contract) {
+            return { success: false, message: "No contract found for this employee." };
+        }
+
+        // 2. Prepare Contract Input
+        const contractInput: ContractInput = {
+            baseRateHourly: Number(contract.baseRateHourly) || 0,
+            ordinaryHoursPerWeek: Number(contract.ordinaryHoursPerWeek) || 38,
+            classification: contract.classification || 'Level 1',
+            overtimeMode: contract.overtimeMode === 'flat_rate' ? 'flat_rate' : 'award_default',
+            type: contract.type,
+            salaryAnnual: Number(contract.salaryAnnual) || 0
+        };
+
+        // 3. Fetch Public Holidays
+        // Determine date range from entries
+        if (entries.length === 0) return { success: true, result: null };
+
+        const dates = entries.map(e => new Date(e.date).getTime());
+        const minDate = new Date(Math.min(...dates));
+        const maxDate = new Date(Math.max(...dates));
+
+        const publicHolidays = await prisma.holidayCalendar.findMany({
+            where: {
+                OR: [{ farmId }, { farmId: null }],
+                date: { gte: minDate, lte: maxDate },
+                type: { in: ['public_holiday', 'local_public_holiday'] }
+            }
+        });
+        const phDates = publicHolidays.map(ph => ph.date.toISOString().split('T')[0]);
+
+        // 4. Compute
+        const result = computePay(entries, contractInput, phDates);
+
+        return { success: true, result };
+
+    } catch (error: any) {
+        console.error("Preview Pay Error:", error);
+        return { success: false, message: error.message };
     }
 }

@@ -35,6 +35,10 @@ export default function LoginPage() {
                         <input type="password" name="password" placeholder="••••••••" required />
                     </div>
 
+                    <div style={{ textAlign: 'right', marginBottom: '1rem' }}>
+                        <Link href="/forgot-password" style={{ fontSize: '0.8rem', color: '#666' }}>Forgot Password?</Link>
+                    </div>
+
                     <LoginButton />
 
                     {state?.error && (
@@ -45,7 +49,7 @@ export default function LoginPage() {
                 </form>
 
                 <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
-                    <Link href="/" style={{ color: '#666', fontSize: '0.9rem' }}>← Back to Home</Link>
+                    <Link href="/" className="btn btn-secondary" style={{ fontSize: '0.9rem' }}>← Back to Home</Link>
                 </div>
             </div>
         </div>

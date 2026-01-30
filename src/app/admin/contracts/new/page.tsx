@@ -15,9 +15,10 @@ export default function ContractWizard() {
         firstName: "",
         lastName: "",
         email: "",
-        type: "employee" as "employee" | "contractor",
+        type: "full_time" as "full_time" | "part_time" | "casual" | "salary" | "contractor",
         classification: "FLH1",
         baseRate: 28.26,
+        salaryAnnual: 60000,
         superannuation: true,
         allowances: {
             dog: false,
@@ -63,7 +64,7 @@ export default function ContractWizard() {
     return (
         <div className="container">
             <header className={styles.header}>
-                <Link href="/admin/staff" className={styles.backLink}>← Cancel</Link>
+                <Link href="/admin/staff" className="btn btn-secondary">← Cancel</Link>
                 <h1>New Contract Wizard</h1>
                 <div className={styles.progressBar}>
                     <div className={`${styles.step} ${step >= 1 ? styles.active : ''}`}>1</div>
@@ -124,20 +125,41 @@ export default function ContractWizard() {
                         <h2>Step 2: Employment Relationship</h2>
                         <p>Is this a standard employee or an independent contractor?</p>
 
-                        <div className={styles.typeSelector}>
+                        <div className={styles.typeSelector} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                             <button
-                                className={`${styles.typeBtn} ${formData.type === 'employee' ? styles.selected : ''}`}
-                                onClick={() => setFormData({ ...formData, type: 'employee' })}
+                                className={`${styles.typeBtn} ${formData.type === 'full_time' ? styles.selected : ''}`}
+                                onClick={() => setFormData({ ...formData, type: 'full_time' })}
                             >
-                                👤 Employee
-                                <small>Paid wages, super, & leave. Covered by Award.</small>
+                                👤 Full-Time
+                                <small>Permanent, 38hrs/wk, leave accruals.</small>
+                            </button>
+                            <button
+                                className={`${styles.typeBtn} ${formData.type === 'part_time' ? styles.selected : ''}`}
+                                onClick={() => setFormData({ ...formData, type: 'part_time' })}
+                            >
+                                👤 Part-Time
+                                <small>Fixed hours, pro-rata leave.</small>
+                            </button>
+                            <button
+                                className={`${styles.typeBtn} ${formData.type === 'casual' ? styles.selected : ''}`}
+                                onClick={() => setFormData({ ...formData, type: 'casual' })}
+                            >
+                                👥 Casual
+                                <small>25% loading, no leave, flexible.</small>
+                            </button>
+                            <button
+                                className={`${styles.typeBtn} ${formData.type === 'salary' ? styles.selected : ''}`}
+                                onClick={() => setFormData({ ...formData, type: 'salary' })}
+                            >
+                                💸 Salary
+                                <small>Fixed annual pay, overtime included.</small>
                             </button>
                             <button
                                 className={`${styles.typeBtn} ${formData.type === 'contractor' ? styles.selected : ''}`}
                                 onClick={() => setFormData({ ...formData, type: 'contractor' })}
                             >
                                 🛠️ Contractor
-                                <small>Invoices for services. Responsible for own tax/insurance.</small>
+                                <small>Invoices for services. No tax/super.</small>
                             </button>
                         </div>
 
@@ -153,7 +175,32 @@ export default function ContractWizard() {
                     <div className={styles.stepContent}>
                         <h2>Step 3: Classification & Pay</h2>
 
-                        {formData.type === 'employee' ? (
+                        {formData.type === 'salary' ? (
+                            <>
+                                <div className={styles.inputGroup}>
+                                    <label>Annual Salary ($AUD Gross)</label>
+                                    <input
+                                        name="salaryAnnual"
+                                        type="number"
+                                        value={formData.salaryAnnual}
+                                        onChange={handleInputChange}
+                                        placeholder="60000"
+                                    />
+                                    <small>Weekly pay will be calculated as Annual / 52.</small>
+                                </div>
+                                <div className={styles.inputGroup}>
+                                    <label>Award Classification (For reference)</label>
+                                    <select
+                                        name="classification"
+                                        value={formData.classification}
+                                        onChange={handleInputChange}
+                                    >
+                                        <option value="FLH7">FLH7 - Station Manager</option>
+                                        <option value="FLH5">FLH5 - Senior Station Hand</option>
+                                    </select>
+                                </div>
+                            </>
+                        ) : formData.type !== 'contractor' ? (
                             <>
                                 <div className={styles.inputGroup}>
                                     <label>Award Level (Pastoral Award 2020)</label>
@@ -170,9 +217,9 @@ export default function ContractWizard() {
                                 </div>
 
                                 <div className={styles.infoBox}>
-                                    <strong>Suggested Min Rate (Casual):</strong> $32.50 / hr
+                                    <strong>Suggested Min Rate ({formData.type === 'casual' ? 'Casual' : 'Permanent'}):</strong> {formData.type === 'casual' ? '$32.50' : '$26.00'} / hr
                                     <br />
-                                    <small>Includes 25% casual loading. Full-time rate would be lower (~$26.00).</small>
+                                    <small>{formData.type === 'casual' ? 'Includes 25% casual loading.' : 'Base rate for permanent staff.'}</small>
                                 </div>
 
                                 <div className={styles.inputGroup}>
@@ -189,7 +236,10 @@ export default function ContractWizard() {
                             <div className={styles.inputGroup}>
                                 <label>Contractor Agreed Rate ($AUD)</label>
                                 <input
+                                    name="baseRate"
                                     type="number"
+                                    value={formData.baseRate}
+                                    onChange={handleInputChange}
                                     placeholder="e.g. 50.00 or Flat Rate"
                                 />
                             </div>

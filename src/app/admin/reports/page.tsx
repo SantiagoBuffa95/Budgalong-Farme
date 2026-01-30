@@ -38,8 +38,29 @@ export default function ReportsPage() {
     const filteredSheets = data.timesheets.filter(ts => {
         // ts.weekEnding is YYYY-MM-DD
         if (periodType === 'week') {
-            // Precise match or within range? Let's do exact match for simplicity first
-            return ts.weekEnding === selectedPeriod;
+            if (!selectedPeriod) return false;
+            // Helper: Check if dates are in same ISO week
+            const d1 = new Date(selectedPeriod);
+            const d2 = new Date(ts.weekEnding);
+
+            // Adjust to Monday start to compare weeks
+            const getWeekBase = (d: Date) => {
+                const date = new Date(d.getTime());
+                const day = date.getDay();
+                const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is sunday
+                return new Date(date.setDate(diff)).setHours(0, 0, 0, 0);
+            };
+
+            // Simple comparison: absolute difference < 7 days? 
+            // Better: Compare if they fall in same Monday-Sunday block
+            // Or easiest for now: Just match exact string first to debug, 
+            // BUT given user report, let's allow a 3-day buffer margin to catch "Weekend" discrepancies
+
+            // Let's stick to "Same Week" logic:
+            const w1 = getWeekBase(d1);
+            const w2 = getWeekBase(d2);
+            return w1 === w2;
+
         } else if (periodType === 'month') {
             return ts.weekEnding.startsWith(selectedPeriod); // YYYY-MM match
         } else {
@@ -53,21 +74,30 @@ export default function ReportsPage() {
     let contractorCost = 0;
 
     filteredSheets.forEach(ts => {
-        const contract = data.contracts.find(c => c.id === ts.employeeId);
+        // Find ACTIVE contract for this employee
+        const contract = data.contracts.find(c => c.employeeId === ts.employeeId && c.status.toLowerCase() === 'active');
         if (!contract) return;
 
-        // Use approved timesheets only? Or all? Let's say all APPROVED for cost reports.
-        if (ts.status !== 'Approved') return;
+        // Use approved AND paid timesheets
+        if (ts.status !== 'Approved' && ts.status !== 'Paid') return;
 
-        // Re-calculate pay to get the gross amount
-        const pay = calculateWeeklyPay(contract, ts.entries);
+        // Use persisted financials if available
+        let grossPay = 0;
+        let superAmount = 0;
+
+        if (ts.financials && ts.financials.gross > 0) {
+            grossPay = ts.financials.gross;
+            superAmount = ts.financials.super;
+        } else {
+            // Re-calculate pay for legacy timesheets
+            const pay = calculateWeeklyPay(contract, ts.entries);
+            grossPay = pay.grossPay;
+            superAmount = pay.superannuation;
+        }
 
         // Sum it up
-        totalCost += pay.grossPay;
-
-        // Add Superannuation for employees to get "True Cost to Company"?
-        // Let's stick to Gross Pay + Super for employees, and Invoice amount for contractors.
-        const trueCost = pay.grossPay + pay.superannuation;
+        totalCost += grossPay;
+        const trueCost = grossPay + superAmount;
 
         if (contract.type === 'contractor') {
             contractorCost += trueCost;
@@ -103,7 +133,7 @@ export default function ReportsPage() {
     return (
         <div className="container">
             <header className={styles.header}>
-                <Link href="/admin" className={styles.backLink}>← Back to Admin</Link>
+                <Link href="/admin" className="btn btn-secondary">← Back to Admin</Link>
                 <h1>Financial Reports</h1>
                 <p>Analyze your farm's labor costs.</p>
             </header>

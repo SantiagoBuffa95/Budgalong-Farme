@@ -14,6 +14,8 @@ export interface ContractInput {
     ordinaryHoursPerWeek: number;
     classification: string;
     overtimeMode: 'award_default' | 'flat_rate';
+    type?: string;
+    salaryAnnual?: number;
 }
 
 export interface PayLine {
@@ -140,9 +142,34 @@ export function computePay(
     // 3. Generate Lines
     const baseRate = contract.baseRateHourly;
 
-    if (ordinaryHours > 0) {
-        lines.push({ code: 'ORD', description: 'Ordinary Hours', units: ordinaryHours, rate: baseRate, amount: ordinaryHours * baseRate });
+    // Check for Salary Mode
+    // If it's explicitly 'salary', OR if it is 'full_time' with 0 hourly rate but has an annual salary provided (inference)
+    const isSalary = (contract.type === 'salary') || (contract.salaryAnnual && contract.salaryAnnual > 0 && (!baseRate || baseRate === 0));
+
+    if (isSalary && contract.salaryAnnual && contract.salaryAnnual > 0) {
+        // Salary Logic: Fixed Weekly Amount
+        const weeklyAmount = contract.salaryAnnual / 52;
+        const derivedRate = weeklyAmount / (contract.ordinaryHoursPerWeek || 38);
+
+        lines.push({
+            code: 'SALARY',
+            description: 'Weekly Salary',
+            units: 38, // Standard week unit
+            rate: parseFloat(derivedRate.toFixed(4)),
+            amount: parseFloat(weeklyAmount.toFixed(2))
+        });
+
+        // Add OT if flagged? For now, ignore pure ordinary hours calculation
+        // But still add OT if explicitly outside "Ordinary"? 
+        // Usually salaried don't get OT unless specific overrides. 
+        // We will SKIP the automatic "Ordinary Hours" line below.
+    } else {
+        // Hourly Logic
+        if (ordinaryHours > 0) {
+            lines.push({ code: 'ORD', description: 'Ordinary Hours', units: ordinaryHours, rate: baseRate, amount: ordinaryHours * baseRate });
+        }
     }
+
     if (ot15Hours > 0) {
         lines.push({ code: 'OT1.5', description: 'Overtime x1.5', units: ot15Hours, rate: baseRate * 1.5, amount: ot15Hours * baseRate * 1.5 });
     }
@@ -159,7 +186,8 @@ export function computePay(
     // 4. Totals
     const gross = lines.reduce((sum, l) => sum + l.amount, 0);
     const tax = calculateWeeklyTax(gross);
-    const superAmount = gross * 0.115; // 11.5% Super Guarantee (2024-25)
+    // Super calculation remains the same (11.5% of OTE). Salary is OTE.
+    const superAmount = gross * 0.115;
 
     return {
         gross: parseFloat(gross.toFixed(2)),

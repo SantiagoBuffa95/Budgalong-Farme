@@ -24,7 +24,7 @@ export default function LegalPage() {
     return (
         <div className="container">
             <header className={styles.header}>
-                <Link href="/admin" className={styles.backLink}>← Back to Admin</Link>
+                <Link href="/admin" className="btn btn-secondary">← Back to Admin</Link>
                 <h1>Pastoral Award 2020</h1>
                 <p>Current Australian Legal Standards for Farm Workers</p>
             </header>
@@ -46,6 +46,18 @@ export default function LegalPage() {
 
                 <div className={styles.importantNote}>
                     <p>⚠️ <strong>Note:</strong> Contractors may have different flat rates as per individual agreements, but they must still meet the 'Better Off Overall Test' (BOOT).</p>
+                </div>
+
+                <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+                    <a
+                        href="https://www.fairwork.gov.au/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-primary"
+                        style={{ textDecoration: 'none' }}
+                    >
+                        Fair work Australia ↗
+                    </a>
                 </div>
             </section>
         </div>

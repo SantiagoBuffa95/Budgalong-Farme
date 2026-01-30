@@ -4,33 +4,49 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "./timesheet.module.css";
-import { saveTimesheet, getContracts } from "@/lib/actions";
-import { TimesheetEntry, Contract, PaySlip } from "@/lib/types";
-import { calculateWeeklyPay } from "@/lib/payroll";
+import { saveTimesheet, getMyContract } from "@/lib/actions";
+import { previewPay } from "@/lib/payroll-actions";
+import { TimesheetEntry, Contract } from "@/lib/types";
 
 export default function TimesheetPage() {
     const router = useRouter();
     const [entries, setEntries] = useState<TimesheetEntry[]>([]);
     const [employee, setEmployee] = useState<Contract | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [previewSlip, setPreviewSlip] = useState<PaySlip | null>(null);
+
+    // Preview State
+    const [previewSlip, setPreviewSlip] = useState<any | null>(null);
+    const [calculating, setCalculating] = useState(false);
 
     useEffect(() => {
         async function load() {
-            const contracts = await getContracts();
-            if (contracts.length > 0) {
-                setEmployee(contracts[contracts.length - 1]);
-            }
+            // Get the contract for the CURRENT logged-in user
+            const myContract = await getMyContract();
+            setEmployee(myContract);
             setIsLoading(false);
         }
         load();
     }, []);
 
-    // Calculate pay whenever entries or employee changes
+    // Calculate pay whenever entries or employee changes (Debounced)
     useEffect(() => {
         if (employee && entries.length > 0) {
-            const slip = calculateWeeklyPay(employee, entries);
-            setPreviewSlip(slip);
+            setCalculating(true);
+            const timer = setTimeout(async () => {
+                const res = await previewPay(entries.map(e => ({
+                    ...e,
+                    date: new Date(e.date),
+                    startTime: new Date(`${e.date}T${e.startTime}`),
+                    endTime: new Date(`${e.date}T${e.endTime}`)
+                })), employee.employeeId);
+
+                if (res.success) {
+                    setPreviewSlip(res.result);
+                }
+                setCalculating(false);
+            }, 800); // 800ms debounce
+
+            return () => clearTimeout(timer);
         } else {
             setPreviewSlip(null);
         }
@@ -92,9 +108,14 @@ export default function TimesheetPage() {
     return (
         <div className="container">
             <header className={styles.header}>
-                <Link href="/employee" className={styles.backLink}>← Back to Profile</Link>
+                <Link href="/employee" className="btn btn-secondary">← Back to Profile</Link>
                 <h1>Log My Weekly Hours</h1>
                 <p>Worker: <strong>{employee.firstName} {employee.lastName}</strong></p>
+                {employee.baseRate === 0 && (
+                    <div style={{ background: '#fff3cd', color: '#856404', padding: '0.5rem', borderRadius: '4px', marginTop: '0.5rem', fontSize: '0.9rem' }}>
+                        ⚠️ No Pay Rate found. Please ask Admin to set up your Contract.
+                    </div>
+                )}
             </header>
 
             <div style={{ maxWidth: '900px', margin: '0 auto', paddingBottom: '100px' }}>
@@ -209,21 +230,27 @@ export default function TimesheetPage() {
                     padding: '1rem', boxShadow: '0 -4px 10px rgba(0,0,0,0.1)',
                     zIndex: 100
                 }}>
-                    <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', maxWidth: '900px' }}>
-                        <div>
-                            <span style={{ fontSize: '0.9rem', color: '#666', display: 'block' }}>Estimated Gross Pay</span>
-                            <strong style={{ fontSize: '1.5rem', color: 'var(--foreground)' }}>${previewSlip.grossPay.toFixed(2)}</strong>
+                    <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', maxWidth: '900px', flexWrap: 'wrap', gap: '1rem' }}>
+
+                        <div style={{ display: 'flex', gap: '2rem', flex: 1 }}>
+                            <div>
+                                <span style={{ fontSize: '0.8rem', color: '#666', display: 'block' }}>Gross Pay</span>
+                                <strong style={{ fontSize: '1.2rem', color: '#333' }}>${previewSlip.gross.toFixed(2)}</strong>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: '0.8rem', color: '#666', display: 'block' }}>Super (11.5%)</span>
+                                <strong style={{ fontSize: '1.2rem', color: '#333' }}>${previewSlip.super.toFixed(2)}</strong>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: '0.8rem', color: '#666', display: 'block' }}>Tax (est)</span>
+                                <strong style={{ fontSize: '1.2rem', color: '#d32f2f' }}>${previewSlip.tax.toFixed(2)}</strong>
+                            </div>
                         </div>
 
-                        <div style={{ textAlign: 'right' }}>
-                            <span style={{ fontSize: '0.9rem', color: '#666', display: 'block' }}>Net Pay (Take Home)</span>
-                            <strong style={{ fontSize: '1.8rem', color: 'var(--primary)' }}>${previewSlip.netPay.toFixed(2)}</strong>
+                        <div style={{ textAlign: 'right', borderLeft: '2px solid #eee', paddingLeft: '1rem' }}>
+                            <span style={{ fontSize: '0.9rem', color: '#666', display: 'block' }}>Net Pay (In Pocket)</span>
+                            <strong style={{ fontSize: '1.8rem', color: 'var(--primary)' }}>${previewSlip.net.toFixed(2)}</strong>
                         </div>
-                    </div>
-
-                    {/* Expandable Details (Optional, kept simple for now) */}
-                    <div className="container" style={{ maxWidth: '900px', marginTop: '0.5rem', fontSize: '0.8rem', color: '#888' }}>
-                        * Includes overtime, penalties & allowances. Tax is estimated.
                     </div>
                 </div>
             )}

@@ -1,19 +1,41 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; // Optional, fallback to anon
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Use Service Role if available (bypasses RLS), otherwise Anon (needs RLS)
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY);
+// Lazy init or null if missing config
+let supabase: any = null;
+
+function getSupabase() {
+    if (supabase) return supabase;
+
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        console.warn("Supabase credentials missing. Storage operations will confirm success but do nothing.");
+        return null;
+    }
+
+    try {
+        supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY);
+        return supabase;
+    } catch (err) {
+        console.error("Failed to init Supabase client:", err);
+        return null;
+    }
+}
 
 export async function uploadPayslip(
     fileName: string,
     fileBuffer: ArrayBuffer
 ): Promise<string | null> {
     try {
-        const { data, error } = await supabase
+        const client = getSupabase();
+        if (!client) {
+            return null; // Gracefully fail if no storage config
+        }
+
+        const { data, error } = await client
             .storage
             .from('payslips')
             .upload(fileName, fileBuffer, {
@@ -32,11 +54,11 @@ export async function uploadPayslip(
         // Let's store the full path or public URL.
 
         // If bucket is private:
-        // const { data: signedData } = await supabase.storage.from('payslips').createSignedUrl(fileName, 31536000); // 1 year?
+        // const { data: signedData } = await client.storage.from('payslips').createSignedUrl(fileName, 31536000); // 1 year?
         // return signedData?.signedUrl || null;
 
         // If bucket is public:
-        const { data: publicData } = supabase.storage.from('payslips').getPublicUrl(fileName);
+        const { data: publicData } = client.storage.from('payslips').getPublicUrl(fileName);
         return publicData.publicUrl;
 
     } catch (e) {

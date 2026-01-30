@@ -101,6 +101,15 @@ model User {
   employeeProfile Employee? // Link to employee record if this user is an employee
   auditLogs     AuditLog[]
 
+  // Invite flow fields
+  inviteToken        String?   @unique @map("invite_token")
+  inviteTokenExpires DateTime? @map("invite_token_expires")
+  inviteCreatedAt    DateTime? @map("invite_created_at")
+
+  // Password Reset fields
+  resetTokenHash     String?   @unique @map("reset_token_hash")
+  resetTokenExpires  DateTime? @map("reset_token_expires")
+
   @@map("users")
 }
 
@@ -111,10 +120,18 @@ model Employee {
   legalName            String    @map("legal_name")
   preferredName        String?   @map("preferred_name")
   phone                String?
+  // Address & Personal
+  address              String?
+  suburb               String?
+  state                String?
+  postcode             String?
+  dateOfBirth          DateTime? @map("date_of_birth")
+  tfn                  String?   // Encrypted
+
   employmentStatus     String    @map("employment_status") // active, terminated, etc
   startDate            DateTime  @map("start_date")
   endDate              DateTime? @map("end_date")
-  ordinaryHoursPerWeek Decimal   @map("ordinary_hours_per_week")
+  ordinaryHoursPerWeek Decimal   @map("ordinary_hours_per_week") // Default 38
   createdAt            DateTime  @default(now()) @map("created_at")
 
   farm       Farm        @relation(fields: [farmId], references: [id])
@@ -123,8 +140,22 @@ model Employee {
   timesheets Timesheet[]
   payslips   Payslip[] // Can have many
   leaveBalance LeaveBalance?
+  superFund    SuperFund?
 
   @@map("employees")
+}
+
+model SuperFund {
+  id           String   @id @default(uuid())
+  employeeId   String   @unique @map("employee_id")
+  fundName     String?  @map("fund_name")
+  memberNumber String?  @map("member_number")
+  usi          String?
+  abn          String?
+  
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("super_funds")
 }
 
 model Contract {
@@ -134,9 +165,9 @@ model Contract {
   type                 String // full_time, part_time, casual, salary, contractor
   classification       String
   baseRateHourly       Decimal? @map("base_rate_hourly")
-  salaryAnnual         Decimal? @map("salary_annual")
-  ordinaryHoursPerWeek Decimal  @map("ordinary_hours_per_week")
-  overtimeMode         String   @map("overtime_mode") // award_default, included_up_to_X, paid_in_addition
+  salaryAnnual         Decimal? @map("salary_annual") // For Salary staff
+  ordinaryHoursPerWeek Decimal  @default(38) @map("ordinary_hours_per_week")
+  overtimeMode         String?  @map("overtime_mode") // included, paid_in_addition
   allowancesConfig     Json?    @map("allowances_config")
   deductionsConfig     Json?    @map("deductions_config")
   awardPackVersion     String   @map("award_pack_version")
@@ -172,6 +203,12 @@ model Timesheet {
   status        String      @default("draft") // draft, submitted, approved, paid
   submittedAt   DateTime?   @map("submitted_at")
   approvedAt    DateTime?   @map("approved_at")
+  
+  // Financial Snapshot (Persisted at submission)
+  grossPay      Decimal?    @map("gross_pay")
+  tax           Decimal?
+  super         Decimal?
+  netPay        Decimal?    @map("net_pay")
 
   farm    Farm             @relation(fields: [farmId], references: [id])
   employee Employee        @relation(fields: [employeeId], references: [id])
