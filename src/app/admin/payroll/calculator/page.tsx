@@ -183,7 +183,7 @@ export default function PayrollCalculator() {
 
                     {!result ? (
                         <div style={{ padding: '2rem', textAlign: 'center', color: '#888' }}>
-                            Update settings and click "Preview Pay" to see results.
+                            Update settings and click &quot;Preview Pay&quot; to see results.
                         </div>
                     ) : (
                         <div style={{ marginTop: '1rem' }}>

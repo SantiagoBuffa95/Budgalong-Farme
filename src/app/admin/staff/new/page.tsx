@@ -160,7 +160,7 @@ export default function NewEmployeeWizard() {
                                     ))}
                                 </select>
                                 <small style={{ color: '#666', marginTop: '0.5rem', display: 'block' }}>
-                                    If you select a user, they'll be able to access their timesheet immediately.
+                                    If you select a user, they&apos;ll be able to access their timesheet immediately.
                                 </small>
                             </div>
                         )}
@@ -366,7 +366,7 @@ export default function NewEmployeeWizard() {
                     <div>
                         <h2 style={{ marginBottom: '1.5rem', borderBottom: '2px solid #eee', paddingBottom: '0.5rem' }}>Superannuation (Optional)</h2>
                         <p style={{ color: '#666', marginBottom: '1.5rem' }}>
-                            Enter the employee's choice of fund. If left blank, you can default to the employer's default fund later.
+                            Enter the employee&apos;s choice of fund. If left blank, you can default to the employer&apos;s default fund later.
                         </p>
 
                         <div className="input-group">

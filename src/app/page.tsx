@@ -36,10 +36,10 @@ export default async function Home() {
 
         <div className={styles.actions}>
           <Link href="/admin/login" className="btn btn-primary" style={{ width: '220px' }}>
-            I'm an Admin
+            I&apos;m an Admin
           </Link>
           <Link href="/login/employee" className="btn btn-secondary" style={{ width: '220px' }}>
-            I'm an Employee
+            I&apos;m an Employee
           </Link>
         </div>
       </section>

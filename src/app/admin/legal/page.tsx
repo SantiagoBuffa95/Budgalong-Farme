@@ -45,7 +45,7 @@ export default function LegalPage() {
                 </div>
 
                 <div className={styles.importantNote}>
-                    <p>⚠️ <strong>Note:</strong> Contractors may have different flat rates as per individual agreements, but they must still meet the 'Better Off Overall Test' (BOOT).</p>
+                    <p>⚠️ <strong>Note:</strong> Contractors may have different flat rates as per individual agreements, but they must still meet the &apos;Better Off Overall Test&apos; (BOOT).</p>
                 </div>
 
                 <div style={{ marginTop: '2rem', textAlign: 'center' }}>

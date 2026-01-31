@@ -5,6 +5,8 @@ import { getEmployeeDashboardData } from "@/lib/employee-actions";
 import Image from "next/image";
 import DownloadPayslipButton from "./DownloadPayslipButton";
 
+export const dynamic = "force-dynamic";
+
 export default async function EmployeeDashboard() {
     const data = await getEmployeeDashboardData();
 

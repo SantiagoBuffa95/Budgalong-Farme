@@ -136,7 +136,7 @@ export default function ReportsPage() {
             <header className={styles.header}>
                 <Link href="/admin" className="btn btn-secondary">← Back to Admin</Link>
                 <h1>Financial Reports</h1>
-                <p>Analyze your farm's labor costs.</p>
+                <p>Analyze your farm&apos;s labor costs.</p>
             </header>
 
             {/* 1. Controller Bar */}
@@ -210,7 +210,7 @@ export default function ReportsPage() {
 
                     <div style={{ marginTop: '2rem', fontSize: '0.8rem', color: '#666' }}>
                         * Includes Wages, Superannuation & Allowances. <br />
-                        * Only counts "Approved" timesheets.
+                        * Only counts &quot;Approved&quot; timesheets.
                     </div>
                 </div>
             </div>
