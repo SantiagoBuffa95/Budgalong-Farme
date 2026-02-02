@@ -460,30 +460,55 @@ export async function deleteUser(employeeId: string) {
             return { success: false, message: "You cannot delete your own account." };
         }
 
-        // Soft Delete (Archive)
-        // Set Exployment Status to 'deleted' (or terminated if deleted not validated)
-        // Set User to inactive
-        // We might want to scramble PII? Prompt says "borrar".
-        // Safe approach: Mark as terminated/inactive.
+        const targetUserId = emp.userId;
 
-        await prisma.employee.update({
-            where: { id: employeeId },
-            data: { employmentStatus: 'deleted' }
+        // HARD DELETE TRANSACTION
+        await prisma.$transaction(async (tx) => {
+            // 1. Leave Logic
+            const balance = await tx.leaveBalance.findUnique({ where: { employeeId } });
+            if (balance) {
+                await tx.leaveTransaction.deleteMany({ where: { balanceId: balance.id } });
+                await tx.leaveBalance.delete({ where: { id: balance.id } });
+            }
+
+            // 2. Timesheets & Payslips
+            await tx.timesheet.deleteMany({ where: { employeeId } }); // Entry cascade
+            await tx.payslip.deleteMany({ where: { employeeId } });
+
+            // 3. Contracts
+            const contracts = await tx.contract.findMany({ where: { employeeId }, select: { id: true } });
+            for (const c of contracts) {
+                await tx.contractVersion.deleteMany({ where: { contractId: c.id } });
+            }
+            await tx.contract.deleteMany({ where: { employeeId } });
+
+            // 4. SuperFund
+            await tx.superFund.deleteMany({ where: { employeeId } });
+
+            // 5. Employee
+            await tx.employee.delete({ where: { id: employeeId } });
+
+            // 6. User & Auth Data
+            if (targetUserId) {
+                await tx.account.deleteMany({ where: { userId: targetUserId } });
+                await tx.session.deleteMany({ where: { userId: targetUserId } });
+
+                // Audit Logs: Must delete where user was actor to allow User deletion
+                await tx.auditLog.deleteMany({ where: { userId: targetUserId } });
+
+                await tx.user.delete({ where: { id: targetUserId } });
+            }
         });
 
-        if (emp.userId) {
-            await prisma.user.update({
-                where: { id: emp.userId },
-                data: { isActive: false }
-            });
-        }
+        await logAudit('USER_DELETED_HARD', currentAdminId, farmId, {
+            deletedEmployeeId: employeeId,
+            deletedUserId: targetUserId
+        });
 
-        await logAudit('USER_DELETED', currentAdminId, farmId, { employeeId, targetUserId: emp.userId });
-
-        return { success: true, message: "User deleted (archived)." };
+        return { success: true, message: "User permanently deleted." };
 
     } catch (e: any) {
-        console.error("Delete User Error:", e);
-        return { success: false, message: "Failed to delete user." };
+        console.error("Delete User Hard Error:", e);
+        return { success: false, message: "Failed to delete user. Check dependencies." };
     }
 }

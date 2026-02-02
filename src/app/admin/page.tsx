@@ -44,7 +44,6 @@ export default async function AdminDashboard() {
                     <p>Analyze labor costs over time.</p>
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <Link href="/admin/reports" className="btn btn-secondary">View Charts</Link>
-                        <Link href="/admin/payroll/test" className="btn btn-secondary" style={{ fontSize: '0.8rem' }}>Playground</Link>
                     </div>
                 </div>
 

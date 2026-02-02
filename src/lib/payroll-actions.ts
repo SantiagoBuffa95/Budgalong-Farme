@@ -758,27 +758,31 @@ export async function deletePayRun(payRunId: string) {
 
         if (!payRun) return { success: false, message: "Pay Run not found" };
 
-        // Revert Timesheets to 'approved'
-        await prisma.timesheet.updateMany({
-            where: {
-                farmId,
-                status: 'paid',
-                employeeId: { in: payRun.payslips.map(p => p.employeeId) },
-                weekStartDate: { gte: payRun.periodStart },
-                weekEndDate: { lte: payRun.periodEnd }
-            },
-            data: { status: 'approved', approvedAt: new Date() }
+        await prisma.$transaction(async (tx) => {
+            // 1. Identify Target Timesheets (Paid, in range, for these employees)
+            // OPTION A: Hard Delete Timesheets as per instruction for "Approved/Processed" removal from reports
+            const employeeIds = payRun.payslips.map(p => p.employeeId);
+
+            await tx.timesheet.deleteMany({
+                where: {
+                    farmId,
+                    status: 'paid', // Only delete if they were marked paid by this run
+                    employeeId: { in: employeeIds },
+                    weekStartDate: { gte: payRun.periodStart },
+                    weekEndDate: { lte: payRun.periodEnd }
+                }
+            });
+
+            // 2. Delete Payslips
+            await tx.payslip.deleteMany({ where: { payRunId } });
+
+            // 3. Delete PayRun
+            await tx.payRun.delete({ where: { id: payRunId } });
         });
 
-        // Delete Payslips (manually due to no cascade default usually, though schema might enforce. Safe to explicit delete)
-        await prisma.payslip.deleteMany({ where: { payRunId } });
+        await logAudit('PAY_RUN_DELETED_HARD', userId, farmId, { payRunId });
 
-        // Delete PayRun
-        await prisma.payRun.delete({ where: { id: payRunId } });
-
-        await logAudit('PAY_RUN_DELETED', userId, farmId, { payRunId });
-
-        return { success: true, message: "Pay Run deleted and timesheets reverted." };
+        return { success: true, message: "Pay Run and associated Paid Timesheets deleted permanently." };
     } catch (error: any) {
         console.error("Delete PayRun Error:", error);
         return { success: false, message: "Failed to delete Pay Run" };
@@ -793,26 +797,17 @@ export async function deleteTimesheet(timesheetId: string) {
         const ts = await prisma.timesheet.findUnique({ where: { id: timesheetId, farmId } });
         if (!ts) return { success: false, message: "Timesheet not found" };
 
-        if (ts.status === 'paid' || ts.status === 'approved') {
-            // For safety, only delete rejected for now unless strictly needed.
-            // Prompt says: "permitir 'Delete' tanto rejected y paid/completed"
-            // But if Paid, we must warn or block?
-            // Prompt: "Admin feature: borrar payslips/payruns ... Eliminarlo también de dashboard"
-            // If I delete a Paid Timesheet, the Payslip becomes invalid? 
-            // "rejected y paid/completed" refers to ITEMS in the list.
-            // The "Processed" list shows Timesheets.
-            // If I delete a Paid timesheet, I am breaking the PayRun link potentially?
-            // Safest: Only allow deleting PayRun for "Paid" items.
-            // Allow deleting Timesheet for "Rejected".
+        await prisma.$transaction(async (tx) => {
+            // Cascade deletes entries
+            await tx.timesheet.delete({ where: { id: timesheetId } });
+        });
 
-            if (ts.status === 'paid') return { success: false, message: "To delete a Paid timesheet, please delete the associated Pay Run." };
-        }
+        await logAudit('TIMESHEET_DELETED_HARD', userId, farmId, { timesheetId, status: ts.status });
 
-        await prisma.timesheet.delete({ where: { id: timesheetId } });
-        await logAudit('TIMESHEET_DELETED', userId, farmId, { timesheetId });
-
-        return { success: true, message: "Timesheet deleted." };
-    } catch (e) {
-        return { success: false, message: "Error deleting timesheet" };
+        return { success: true, message: "Timesheet deleted permanently." };
+    } catch (error: any) {
+        console.error("Delete Timesheet Error:", error);
+        return { success: false, message: "Failed to delete timesheet." };
     }
 }
+
