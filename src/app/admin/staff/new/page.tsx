@@ -175,8 +175,8 @@ export default function NewEmployeeWizard() {
                                 <input type="text" value={formData.preferredName} onChange={e => updateField('preferredName', e.target.value)} />
                             </div>
                             <div className="input-group">
-                                <label>Email (for invite)</label>
-                                <input type="email" value={formData.email} onChange={e => updateField('email', e.target.value)} />
+                                <label>Email (Required for Account) *</label>
+                                <input type="email" value={formData.email} onChange={e => updateField('email', e.target.value)} required />
                             </div>
                             <div className="input-group">
                                 <label>Phone</label>
@@ -426,7 +426,7 @@ export default function NewEmployeeWizard() {
                     )}
 
                     {step < 5 ? (
-                        <button onClick={nextStep} className="btn btn-primary" disabled={!formData.legalName}>Next Step →</button>
+                        <button onClick={nextStep} className="btn btn-primary" disabled={!formData.legalName || !formData.email}>Next Step →</button>
                     ) : (
                         <button onClick={handleSubmit} className="btn btn-primary" disabled={isSubmitting}>
                             {isSubmitting ? 'Creating...' : 'Confirm & Create Employee'}

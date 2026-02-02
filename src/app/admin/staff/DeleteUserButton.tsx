@@ -1,15 +1,15 @@
+
 "use client";
 
 import { useState } from "react";
-import { toggleAdminRole } from "@/lib/invite-actions";
+import { deleteUser } from "@/lib/invite-actions";
 
-export default function RoleToggleButton({ employeeId, currentRole, employeeName }: { employeeId: string, currentRole?: string, employeeName: string }) {
-    const isAdmin = currentRole === 'admin';
+export default function DeleteUserButton({ employeeId, employeeName }: { employeeId: string, employeeName: string }) {
     const [loading, setLoading] = useState(false);
     const [confirming, setConfirming] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const handleToggle = async () => {
+    const handleDelete = async () => {
         if (!confirming) {
             setConfirming(true);
             setTimeout(() => setConfirming(false), 4000); // Reset after 4s
@@ -19,17 +19,17 @@ export default function RoleToggleButton({ employeeId, currentRole, employeeName
         setLoading(true);
         setError(null);
         try {
-            const res = await toggleAdminRole(employeeId, !isAdmin);
-            if (res.success) {
-                window.location.reload();
-            } else {
+            const res = await deleteUser(employeeId);
+            if (!res.success) {
                 setError(res.message || "Failed");
                 setConfirming(false);
+                setLoading(false);
+            } else {
+                window.location.reload();
             }
         } catch (err) {
             setError("Error");
             setConfirming(false);
-        } finally {
             setLoading(false);
         }
     };
@@ -37,23 +37,23 @@ export default function RoleToggleButton({ employeeId, currentRole, employeeName
     return (
         <div style={{ display: 'inline-flex', alignItems: 'center' }}>
             <button
-                onClick={handleToggle}
+                onClick={handleDelete}
                 disabled={loading}
                 className="btn-sm"
-                title={isAdmin ? "Demote to Employee" : "Promote to Admin"}
+                title="Permanently remove user"
                 style={{
-                    background: confirming ? '#ff9800' : (isAdmin ? '#673ab7' : '#f5f5f5'),
-                    color: confirming ? 'white' : (isAdmin ? 'white' : '#666'),
-                    border: '1px solid #ccc',
+                    background: confirming ? '#d32f2f' : '#f5f5f5',
+                    color: confirming ? 'white' : '#d32f2f',
+                    border: '1px solid #d32f2f',
                     cursor: 'pointer',
                     fontSize: '0.8rem',
                     padding: '0.25rem 0.5rem',
                     marginLeft: '0.5rem',
-                    fontWeight: isAdmin ? 'bold' : 'normal',
-                    transition: 'all 0.2s'
+                    transition: 'all 0.2s',
+                    fontWeight: confirming ? 'bold' : 'normal'
                 }}
             >
-                {loading ? '...' : (confirming ? 'Confirm?' : (isAdmin ? 'Admin' : 'Staff'))}
+                {loading ? '...' : (confirming ? 'Really Delete?' : 'Delete')}
             </button>
             {error && <span style={{ color: 'red', fontSize: '0.75rem', marginLeft: '5px' }}>{error}</span>}
         </div>

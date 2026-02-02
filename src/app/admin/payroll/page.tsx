@@ -2,16 +2,34 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import styles from "./payroll.module.css";
 import { getTimesheets } from "@/lib/actions";
-import { processSingleTimesheet, rejectTimesheet, regeneratePayslipPdf } from "@/lib/payroll-actions";
-import Image from "next/image";
+import { processSingleTimesheet, rejectTimesheet, regeneratePayslipPdf, deletePayRun, deleteTimesheet } from "@/lib/payroll-actions";
+
+// ...
+
+
+
+
 
 export default function AdminPayrollPage() {
     const [timesheets, setTimesheets] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedTs, setSelectedTs] = useState<any | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
+
+    // UI State for Feedback
+    const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+    const [confirmAction, setConfirmAction] = useState<{ type: 'approve' | 'reject', id: string } | null>(null);
+
+    // Auto-hide notification
+    useEffect(() => {
+        if (notification) {
+            const timer = setTimeout(() => setNotification(null), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [notification]);
 
     useEffect(() => {
         async function load() {
@@ -24,22 +42,54 @@ export default function AdminPayrollPage() {
 
 
 
+    const handleDeleteTimesheet = async (id: string) => {
+        if (!confirm("Are you sure you want to permanently delete this timesheet?")) return;
+        setIsProcessing(true);
+        try {
+            const res = await deleteTimesheet(id);
+            if (res.success) {
+                setNotification({ type: 'success', message: 'Timesheet deleted.' });
+                refresh();
+            } else {
+                setNotification({ type: 'error', message: res.message || 'Error deleting.' });
+            }
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleDeletePayRun = async (payRunId: string) => {
+        if (!payRunId) return;
+        if (!confirm("Warning: Deleting a Pay Run will remove generated payslips and revert the timesheet to 'Approved' status. Continue?")) return;
+        setIsProcessing(true);
+        try {
+            const res = await deletePayRun(payRunId);
+            if (res.success) {
+                setNotification({ type: 'success', message: 'Pay Run deleted. Timesheet is now Approved.' });
+                refresh();
+            } else {
+                setNotification({ type: 'error', message: res.message || 'Error deleting Pay Run.' });
+            }
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     const handleApproveAndPay = async () => {
         if (!selectedTs) return;
-        if (!confirm(`Confirm Pay Run for ${selectedTs.employeeName}? This will generate a payslip and mark as paid.`)) return;
-
         setIsProcessing(true);
         try {
             const result = await processSingleTimesheet(selectedTs.id);
             if (result.success) {
-                alert(result.message);
+                setNotification({ type: 'success', message: result.message || 'Payslip generated successfully.' });
                 setSelectedTs(null);
+                setConfirmAction(null);
                 refresh();
             } else {
-                alert("Error: " + result.message);
+                setNotification({ type: 'error', message: "Error: " + result.message });
             }
         } catch (err) {
-            alert("Approval failed.");
+            setNotification({ type: 'error', message: "Approval failed due to a system error." });
         } finally {
             setIsProcessing(false);
         }
@@ -47,20 +97,19 @@ export default function AdminPayrollPage() {
 
     const handleReject = async () => {
         if (!selectedTs) return;
-        if (!confirm(`Reject timesheet for ${selectedTs.employeeName}? They will need to correct and resubmit.`)) return;
-
         setIsProcessing(true);
         try {
             const result = await rejectTimesheet(selectedTs.id);
             if (result.success) {
-                alert(result.message);
+                setNotification({ type: 'success', message: result.message || 'Timesheet rejected.' });
                 setSelectedTs(null);
+                setConfirmAction(null);
                 refresh();
             } else {
-                alert("Error: " + result.message);
+                setNotification({ type: 'error', message: "Error: " + result.message });
             }
         } catch (err) {
-            alert("Rejection failed.");
+            setNotification({ type: 'error', message: "Rejection failed." });
         } finally {
             setIsProcessing(false);
         }
@@ -70,6 +119,8 @@ export default function AdminPayrollPage() {
         setIsProcessing(true);
         try {
             const res = await regeneratePayslipPdf(tsId);
+
+            // Case 1: Base64 (Regenerated)
             if (res.success && res.pdfBase64) {
                 const byteCharacters = atob(res.pdfBase64);
                 const byteNumbers = new Array(byteCharacters.length);
@@ -86,12 +137,23 @@ export default function AdminPayrollPage() {
                 a.click();
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
-            } else {
-                alert("Failed to download: " + (res.message || "Unknown error"));
+            }
+            // Case 2: Direct URL (From Storage)
+            else if (res.success && res.pdfUrl) {
+                const a = document.createElement('a');
+                a.href = res.pdfUrl;
+                a.target = '_blank';
+                a.download = `Payslip_${employeeName}.pdf`; // Might be ignored by browser for cross-origin but good intent
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+            else {
+                setNotification({ type: 'error', message: "Failed to download: " + (res.message || "Unknown error") });
             }
         } catch (e) {
             console.error(e);
-            alert("Download error");
+            setNotification({ type: 'error', message: "Download error occurred." });
         } finally {
             setIsProcessing(false);
         }
@@ -148,10 +210,19 @@ export default function AdminPayrollPage() {
                     <h2 className={styles.sectionTitle}>🔴 Rejected / Returned ({rejected.length})</h2>
                     <div className="grid-auto">
                         {rejected.map((ts: any) => (
-                            <div key={ts.id} className="card" style={{ opacity: 0.7 }}>
-                                <h3>{ts.employeeName}</h3>
-                                <p>Week Ending: {ts.weekEnding}</p>
-                                <p>Status: <span style={{ color: 'red' }}>Rejected</span></p>
+                            <div key={ts.id} className="card" style={{ opacity: 0.7, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <div>
+                                    <h3>{ts.employeeName}</h3>
+                                    <p>Week Ending: {ts.weekEnding}</p>
+                                    <p>Status: <span style={{ color: 'red' }}>Rejected</span></p>
+                                </div>
+                                <button
+                                    className="btn-sm"
+                                    onClick={(e) => { e.stopPropagation(); handleDeleteTimesheet(ts.id); }}
+                                    style={{ background: '#d32f2f', color: 'white', border: 'none', alignSelf: 'flex-start', cursor: 'pointer', padding: '0.5rem' }}
+                                >
+                                    🗑️ Delete Forever
+                                </button>
                             </div>
                         ))}
                     </div>
@@ -234,21 +305,46 @@ export default function AdminPayrollPage() {
                         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '2rem' }}>
                             <button className="btn btn-secondary" onClick={() => setSelectedTs(null)} disabled={isProcessing}>Close</button>
 
-                            {selectedTs.status === 'Pending' && (
-                                <button
-                                    className="btn"
-                                    onClick={handleReject}
-                                    disabled={isProcessing}
-                                    style={{ background: '#d32f2f', color: 'white', border: 'none' }}
-                                >
-                                    Reject & Return
-                                </button>
+                            {selectedTs.status === 'Pending' && !confirmAction && (
+                                <>
+                                    <button
+                                        className="btn"
+                                        onClick={() => setConfirmAction({ type: 'reject', id: selectedTs.id })}
+                                        disabled={isProcessing}
+                                        style={{ background: '#d32f2f', color: 'white', border: 'none' }}
+                                    >
+                                        Reject & Return
+                                    </button>
+                                    <button className="btn btn-primary" onClick={() => setConfirmAction({ type: 'approve', id: selectedTs.id })} disabled={isProcessing}>
+                                        Approve & Pay (Generate Slip)
+                                    </button>
+                                </>
                             )}
 
-                            {selectedTs.status === 'Pending' && (
-                                <button className="btn btn-primary" onClick={handleApproveAndPay} disabled={isProcessing}>
-                                    {isProcessing ? 'Processing...' : 'Approve & Pay (Generate Slip)'}
-                                </button>
+                            {/* Confirmation State UI */}
+                            {confirmAction && (
+                                <div style={{ background: '#fff3e0', padding: '0.5rem 1rem', borderRadius: '6px', display: 'flex', gap: '0.5rem', alignItems: 'center', border: '1px solid #ffe0b2' }}>
+                                    <span style={{ fontSize: '0.9rem', color: '#e65100', fontWeight: 'bold' }}>
+                                        {confirmAction.type === 'approve' ? 'Confirm Pay Run?' : 'Confirm Rejection?'}
+                                    </span>
+                                    <button
+                                        className="btn-sm"
+                                        style={{ background: '#ccc', border: 'none', padding: '0.3rem 0.8rem', cursor: 'pointer' }}
+                                        onClick={() => setConfirmAction(null)}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        className="btn-sm"
+                                        style={{
+                                            background: confirmAction.type === 'approve' ? 'var(--primary)' : '#d32f2f',
+                                            color: '#fff', border: 'none', padding: '0.3rem 0.8rem', cursor: 'pointer', fontWeight: 'bold'
+                                        }}
+                                        onClick={confirmAction.type === 'approve' ? handleApproveAndPay : handleReject}
+                                    >
+                                        Yes, {confirmAction.type === 'approve' ? 'Proceed' : 'Reject'}
+                                    </button>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -265,20 +361,50 @@ export default function AdminPayrollPage() {
                             {processed.map((ts: any) => (
                                 <li key={ts.id} style={{ marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <span>{ts.employeeName} - {ts.weekEnding} (Status: {ts.status})</span>
-                                    <button
-                                        className="btn-sm"
-                                        onClick={() => handleDownload(ts.id, ts.employeeName)}
-                                        style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '0.25rem 0.7rem', borderRadius: '4px', cursor: 'pointer' }}
-                                        disabled={isProcessing}
-                                    >
-                                        📥 Download PDF
-                                    </button>
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <button
+                                            className="btn-sm"
+                                            onClick={() => handleDownload(ts.id, ts.employeeName)}
+                                            style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '0.25rem 0.7rem', borderRadius: '4px', cursor: 'pointer' }}
+                                            disabled={isProcessing}
+                                        >
+                                            📥 Download PDF
+                                        </button>
+                                        {ts.payRunId && (
+                                            <button
+                                                className="btn-sm"
+                                                onClick={() => handleDeletePayRun(ts.payRunId)}
+                                                style={{ background: '#d32f2f', color: 'white', border: 'none', padding: '0.25rem 0.7rem', borderRadius: '4px', cursor: 'pointer' }}
+                                                disabled={isProcessing}
+                                                title="Delete Pay Run & Revert Timesheet"
+                                            >
+                                                🗑️ Undo
+                                            </button>
+                                        )}
+                                    </div>
                                 </li>
                             ))}
                         </ul>
                     )}
                 </div>
             </section>
-        </div>
+
+
+            {/* NOTIFICATION TOAST */}
+            {
+                notification && (
+                    <div style={{
+                        position: 'fixed', bottom: '20px', right: '20px',
+                        padding: '1rem 1.5rem', borderRadius: '8px',
+                        color: '#fff',
+                        backgroundColor: notification.type === 'success' ? '#2e7d32' : '#d32f2f',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)', zIndex: 9999,
+                        animation: 'fadeIn 0.3s'
+                    }}>
+                        <strong>{notification.type === 'success' ? 'Success' : 'Error'}</strong>: {notification.message}
+                    </div>
+                )
+            }
+        </div >
     );
 }

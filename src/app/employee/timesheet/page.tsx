@@ -13,6 +13,16 @@ export default function TimesheetPage() {
     const [entries, setEntries] = useState<TimesheetEntry[]>([]);
     const [employee, setEmployee] = useState<Contract | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+
+    // Auto-hide notification
+    useEffect(() => {
+        if (notification) {
+            const timer = setTimeout(() => setNotification(null), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [notification]);
 
     // Preview State
     const [previewSlip, setPreviewSlip] = useState<any | null>(null);
@@ -79,6 +89,7 @@ export default function TimesheetPage() {
         e.preventDefault();
         if (!employee || entries.length === 0) return;
 
+        setIsSubmitting(true);
         const result = await saveTimesheet({
             employeeId: employee.id,
             employeeName: `${employee.firstName} ${employee.lastName}`,
@@ -87,10 +98,11 @@ export default function TimesheetPage() {
         });
 
         if (result.success) {
-            alert("Weekly hours submitted for approval!");
-            router.push("/employee");
+            setNotification({ type: 'success', message: "Weekly hours submitted for approval!" });
+            setTimeout(() => router.push("/employee"), 2000); // Redirect after delay
         } else {
-            alert("Error: " + result.message);
+            setNotification({ type: 'error', message: "Error: " + result.message });
+            setIsSubmitting(false);
         }
     };
 
@@ -252,6 +264,19 @@ export default function TimesheetPage() {
                             <strong style={{ fontSize: '1.8rem', color: 'var(--primary)' }}>${previewSlip.net.toFixed(2)}</strong>
                         </div>
                     </div>
+                </div>
+            )}
+            {/* NOTIFICATION TOAST */}
+            {notification && (
+                <div style={{
+                    position: 'fixed', bottom: '80px', right: '20px', // Raised above sticky footer
+                    padding: '1rem 1.5rem', borderRadius: '8px',
+                    color: '#fff',
+                    backgroundColor: notification.type === 'success' ? '#2e7d32' : '#d32f2f',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)', zIndex: 9999,
+                    animation: 'fadeIn 0.3s'
+                }}>
+                    <strong>{notification.type === 'success' ? 'Success' : 'Error'}</strong>: {notification.message}
                 </div>
             )}
         </div>

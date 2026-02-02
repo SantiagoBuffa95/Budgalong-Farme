@@ -35,11 +35,8 @@ export default async function Home() {
         </p>
 
         <div className={styles.actions}>
-          <Link href="/admin/login" className="btn btn-primary" style={{ width: '220px' }}>
-            I&apos;m an Admin
-          </Link>
-          <Link href="/login/employee" className="btn btn-secondary" style={{ width: '220px' }}>
-            I&apos;m an Employee
+          <Link href="/login" className="btn btn-primary" style={{ width: '220px', padding: '1rem', fontSize: '1.2rem' }}>
+            Login to Portal
           </Link>
         </div>
       </section>

@@ -7,6 +7,8 @@ export interface TimesheetEntryInput {
     endTime: Date;
     breakMinutes: number;
     taskCode?: string;
+    isNightShift?: boolean;
+    isPublicHoliday?: boolean;
 }
 
 export interface ContractInput {
@@ -16,6 +18,13 @@ export interface ContractInput {
     overtimeMode: 'award_default' | 'flat_rate';
     type?: string;
     salaryAnnual?: number;
+    allowances?: {
+        dog?: boolean;
+        horse?: boolean;
+        firstAid?: boolean;
+        meal?: boolean; // Currently treated as weekly/recurring for MVP, normally per-occurrence
+        tool?: boolean;
+    };
 }
 
 export interface PayLine {
@@ -36,20 +45,13 @@ export interface PayResult {
 
 export const TAX_BRACKETS_2025 = [
     { limit: 18200, rate: 0 },
-    { limit: 45000, rate: 0.16 }, // Stage 3 cuts (modified for 2024-25) - actually 16% up to 135k? 
-    // Standard 2024-25 Residents:
-    // 0 - 18,200: Nil
-    // 18,201 - 45,000: 16c for each $1 over 18,200
-    // 45,001 - 135,000: 30c for each $1 over 45,000
-    // 135,001 - 190,000: 37c
-    // > 190,000: 45c
-    // BUT calculating WEEKLY withholding is complex (ATO Formulas).
-    // MVP: Flat approximation or simple annualized bracket.
-    // Let's use a simplified weekly formula based on brackets.
+    { limit: 45000, rate: 0.16 },
+    { limit: 135000, rate: 0.30 },
+    { limit: 190000, rate: 0.37 },
+    { limit: 999999999, rate: 0.45 }
 ];
 
 export function calculateWeeklyTax(gross: number): number {
-    // Simplified ATO 2024-25 Weekly Withholding (approx)
     const annual = gross * 52;
     let annualTax = 0;
 
@@ -74,11 +76,34 @@ export function computePay(
     publicHolidays: string[] // ISO dates YYYY-MM-DD
 ): PayResult {
     const lines: PayLine[] = [];
+
+    // Hourly Buckets
     let ordinaryHours = 0;
     let ot15Hours = 0;
     let ot20Hours = 0;
     let phHours = 0;
+    let nightHours = 0;
     let sundayHours = 0;
+
+    // Contract Type Checks
+    const type = (contract.type || 'casual').toLowerCase();
+    const isCasual = type === 'casual';
+    const isSalary = type === 'salary' || (contract.salaryAnnual && contract.salaryAnnual > 0 && (!contract.baseRateHourly || contract.baseRateHourly === 0));
+    const isPartTime = type === 'part_time';
+    const isFullTime = type === 'full_time';
+
+    // Base Rate
+    let baseRate = contract.baseRateHourly || 0;
+    if (isSalary && contract.salaryAnnual) {
+        // Derived hourly rate for OT calc if needed
+        baseRate = contract.salaryAnnual / 52 / (contract.ordinaryHoursPerWeek || 38);
+    }
+
+    // Loading Multipliers (Approximations based on common Awards)
+    const CASUAL_LOADING = 0.25; // 25%
+    const PH_MULTIPLIER = isCasual ? 2.5 : 2.0; // Casuals get higher PH rate usually
+    const SUNDAY_MULTIPLIER = 2.0;
+    const NIGHT_MULTIPLIER = 0.15; // 15% loading
 
     // 1. Calculate Daily Hours & Classify
     for (const entry of entries) {
@@ -90,25 +115,40 @@ export function computePay(
         const dateStr = entry.date.toISOString().split('T')[0];
         const dayOfWeek = entry.date.getDay(); // 0 = Sunday
 
-        // Check PH
-        if (publicHolidays.includes(dateStr)) {
+        // Check Flags
+        const isPH = entry.isPublicHoliday || publicHolidays.includes(dateStr);
+        const isNight = !!entry.isNightShift;
+
+        // --- PUBLIC HOLIDAY ---
+        if (isPH) {
             phHours += hours;
-            continue;
+            continue; // PH overrides all
         }
 
-        // Check Sunday
+        // --- SUNDAY ---
         if (dayOfWeek === 0) {
-            sundayHours += hours; // Award: Sunday is usually double time for Farm Hands
-            continue;
+            sundayHours += hours;
+            continue; // Sunday overrides ordinary
         }
 
-        // Ordinary vs OT (Daily > 10)
-        if (hours > 10) {
-            const ot = hours - 10;
-            const ord = 10;
+        // --- OVERTIME & ORDINARY ---
+        let limit = 100; // Unlimited effectively
+        if (isSalary) limit = 7.5;
+        // Perm (FT/PT) daily OT is implied standard 10h if not specified otherwise, but strict prompt said "without restriction daily" for FT.
+        // However, usually 10h is a safeguard. If prompt specifically asked "without restriction", maybe limit=100 for FT/PT too.
+        // Casual NO Weekly OT, but YES Daily OT? Usually Casuals get OT > 10.
+        // I will stick to 10h for Casual, 100 for FT/PT (rely on Weekly), 7.5 for Salary.
+        if (isCasual) limit = 10;
+        if (isFullTime || isPartTime) limit = 100;
+
+        if (hours > limit) {
+            const ord = limit;
+            const ot = hours - limit;
 
             ordinaryHours += ord;
-            // Daily OT is usually T1.5 first 2 hours, then T2.0
+            if (isNight) nightHours += ord;
+
+            // OT Logic
             if (ot > 2) {
                 ot15Hours += 2;
                 ot20Hours += (ot - 2);
@@ -117,77 +157,90 @@ export function computePay(
             }
         } else {
             ordinaryHours += hours;
+            if (isNight) nightHours += hours;
         }
     }
 
-    // 2. Weekly OT Check (simplified > 38)
-    // This interacts with daily OT. Usually you pick the method that benefits employee or specific order.
-    // MVP Rule: Total Ordinary > 38 -> convert excess to OT1.5
-    if (ordinaryHours > 38) {
-        const excess = ordinaryHours - 38;
-        ordinaryHours = 38;
+    // 2. Weekly OT Check
+    if (!isCasual && !isSalary) {
+        if (ordinaryHours > 38) {
+            const excess = ordinaryHours - 38;
+            ordinaryHours = 38;
 
-        // Weekly OT Escalation (Common interpretation: starts at 1.5x)
-        // Note: Some awards reset the "first 2 hours" counter daily. 
-        // If the excess comes from "Ord hours > 38", it's distinct from Daily OT.
-        // We'll apply the standard 2 hrs @ 1.5 then 2.0 rule to this block too.
-        if (excess > 2) {
-            ot15Hours += 2;
-            ot20Hours += (excess - 2);
-        } else {
-            ot15Hours += excess;
+            if (excess > 2) {
+                ot15Hours += 2;
+                ot20Hours += (excess - 2);
+            } else {
+                ot15Hours += excess;
+            }
         }
     }
 
     // 3. Generate Lines
-    const baseRate = contract.baseRateHourly;
 
-    // Check for Salary Mode
-    // If it's explicitly 'salary', OR if it is 'full_time' with 0 hourly rate but has an annual salary provided (inference)
-    const isSalary = (contract.type === 'salary') || (contract.salaryAnnual && contract.salaryAnnual > 0 && (!baseRate || baseRate === 0));
-
-    if (isSalary && contract.salaryAnnual && contract.salaryAnnual > 0) {
-        // Salary Logic: Fixed Weekly Amount
-        const weeklyAmount = contract.salaryAnnual / 52;
-        const derivedRate = weeklyAmount / (contract.ordinaryHoursPerWeek || 38);
-
+    // --- SALARY ---
+    if (isSalary) {
+        const salaryWeekly = (contract.salaryAnnual || 0) / 52;
         lines.push({
             code: 'SALARY',
-            description: 'Weekly Salary',
-            units: 38, // Standard week unit
-            rate: parseFloat(derivedRate.toFixed(4)),
-            amount: parseFloat(weeklyAmount.toFixed(2))
+            description: 'Weekly Salary Base',
+            units: 38, // Placeholder units
+            rate: parseFloat(derivedRate(contract).toFixed(4)),
+            amount: parseFloat(salaryWeekly.toFixed(2))
         });
-
-        // Add OT if flagged? For now, ignore pure ordinary hours calculation
-        // But still add OT if explicitly outside "Ordinary"? 
-        // Usually salaried don't get OT unless specific overrides. 
-        // We will SKIP the automatic "Ordinary Hours" line below.
     } else {
-        // Hourly Logic
+        // --- HOURLY (Casual / FT / PT) ---
+        let payRate = baseRate;
+        // Note: For Casual, if baseRate is 'flat', it likely includes loading.
+        // If it doesn't, we should add it. Prompt says "Casual Pago base: flat hourly rate".
+        // I'll assume inputted rate IS the rate.
+
         if (ordinaryHours > 0) {
-            lines.push({ code: 'ORD', description: 'Ordinary Hours', units: ordinaryHours, rate: baseRate, amount: ordinaryHours * baseRate });
+            lines.push({ code: 'ORD', description: isCasual ? 'Casual Hours' : 'Ordinary Hours', units: ordinaryHours, rate: payRate, amount: ordinaryHours * payRate });
         }
     }
 
+    // --- LOADINGS & OT ---
+    // Night Shift
+    if (nightHours > 0) {
+        const loadingRate = baseRate * NIGHT_MULTIPLIER;
+        lines.push({ code: 'NIGHT', description: 'Night Shift Loading', units: nightHours, rate: loadingRate, amount: nightHours * loadingRate });
+    }
+
+    // OT
     if (ot15Hours > 0) {
         lines.push({ code: 'OT1.5', description: 'Overtime x1.5', units: ot15Hours, rate: baseRate * 1.5, amount: ot15Hours * baseRate * 1.5 });
     }
     if (ot20Hours > 0) {
         lines.push({ code: 'OT2.0', description: 'Overtime x2.0', units: ot20Hours, rate: baseRate * 2.0, amount: ot20Hours * baseRate * 2.0 });
     }
+
+    // Special Days
     if (sundayHours > 0) {
-        lines.push({ code: 'SUN', description: 'Sunday Hours', units: sundayHours, rate: baseRate * 2.0, amount: sundayHours * baseRate * 2.0 });
+        const rate = baseRate * SUNDAY_MULTIPLIER;
+        lines.push({ code: 'SUN', description: 'Sunday Work', units: sundayHours, rate: rate, amount: sundayHours * rate });
     }
     if (phHours > 0) {
-        lines.push({ code: 'PH', description: 'Public Holiday', units: phHours, rate: baseRate * 2.0, amount: phHours * baseRate * 2.0 }); // Award: 200%
+        const rate = baseRate * PH_MULTIPLIER;
+        lines.push({ code: 'PH', description: 'Public Holiday', units: phHours, rate: rate, amount: phHours * rate });
+    }
+
+    // --- ALLOWANCES ---
+    if (contract.allowances) {
+        const { dog, horse, firstAid, tool, meal } = contract.allowances;
+
+        if (dog) lines.push({ code: 'ALL_DOG', description: 'Dog Allowance', units: 1, rate: 10.00, amount: 10.00 });
+        if (horse) lines.push({ code: 'ALL_HORSE', description: 'Horse Allowance', units: 1, rate: 15.00, amount: 15.00 });
+        if (firstAid) lines.push({ code: 'ALL_FA', description: 'First Aid Allowance', units: 1, rate: 5.00, amount: 5.00 });
+        if (meal) lines.push({ code: 'ALL_MEAL', description: 'Meal Allowance', units: 1, rate: 15.00, amount: 15.00 });
     }
 
     // 4. Totals
     const gross = lines.reduce((sum, l) => sum + l.amount, 0);
     const tax = calculateWeeklyTax(gross);
-    // Super calculation remains the same (11.5% of OTE). Salary is OTE.
-    const superAmount = gross * 0.115;
+    const oteLines = lines.filter(l => !l.code.startsWith('OT')); // Exclude OT from Super
+    const ote = oteLines.reduce((sum, l) => sum + l.amount, 0);
+    const superAmount = ote * 0.115;
 
     return {
         gross: parseFloat(gross.toFixed(2)),
@@ -196,4 +249,8 @@ export function computePay(
         net: parseFloat((gross - tax).toFixed(2)),
         lines
     };
+}
+
+function derivedRate(contract: ContractInput): number {
+    return (contract.salaryAnnual || 0) / 52 / (contract.ordinaryHoursPerWeek || 38);
 }

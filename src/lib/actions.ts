@@ -6,6 +6,15 @@ import { getSessionFarmIdOrThrow, ensureAdmin, logAudit } from '@/lib/auth-helpe
 import bcrypt from 'bcryptjs';
 import { computePay } from './payroll/engine';
 
+function checkNightShift(start: Date, end: Date): boolean {
+    const s = start.getHours();
+    const e = end.getHours();
+    if (s >= 20 || s < 6) return true;
+    if (e > 20 || e <= 6) return true;
+    if (end < start) return true;
+    return false;
+}
+
 // --- CONTRACTS ---
 
 export async function saveContract(data: NewContractData): Promise<{ success: boolean; message?: string }> {
@@ -233,7 +242,8 @@ export async function saveTimesheet(data: any): Promise<{ success: boolean; mess
                     startTime: new Date(`${e.date}T${e.startTime}:00`),
                     endTime: new Date(`${e.date}T${e.endTime}:00`), // Note: handle overnight if needed logic exists in engine
                     breakMinutes: Number(e.breakMinutes) || 0,
-                    taskCode: e.activity
+                    taskCode: e.activity,
+                    isNightShift: checkNightShift(new Date(`${e.date}T${e.startTime}:00`), new Date(`${e.date}T${e.endTime}:00`))
                 }));
 
                 // Fix Overnight dates for engine input if basic date parsing failed logic
@@ -337,36 +347,57 @@ export async function getTimesheets(employeeId?: string): Promise<any[]> {
         const timesheets = await prisma.timesheet.findMany({
             where,
             include: {
-                employee: true,
+                employee: {
+                    include: {
+                        payslips: {
+                            include: { payRun: true },
+                            orderBy: { issuedAt: 'desc' }
+                        }
+                    }
+                },
                 entries: true
             },
             orderBy: { weekStartDate: 'desc' }
         });
 
-        return timesheets.map((ts: any) => ({
-            id: ts.id,
-            employeeId: ts.employeeId,
-            employeeName: ts.employee?.preferredName || "Unknown",
-            weekEnding: ts.weekEndDate.toISOString().split('T')[0],
-            status: ts.status === 'submitted' ? 'Pending' :
-                (ts.status === 'approved' ? 'Approved' :
-                    (ts.status === 'paid' ? 'Paid' :
-                        (ts.status === 'rejected' ? 'Rejected' : 'Draft'))),
-            submittedAt: ts.submittedAt?.toISOString(),
-            financials: {
-                gross: Number(ts.grossPay) || 0,
-                tax: Number(ts.tax) || 0,
-                super: Number(ts.super) || 0,
-                net: Number(ts.netPay) || 0,
-            },
-            entries: ts.entries.map((e: any) => ({
-                date: e.date.toISOString().split('T')[0],
-                startTime: e.startTime.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false }),
-                endTime: e.endTime.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false }),
-                breakMinutes: e.breakMinutes,
-                activity: e.taskCode
-            }))
-        }));
+        return timesheets.map((ts: any) => {
+            // Find linked PayRun/Payslip if Paid
+            let payRunId = undefined;
+            if (ts.status === 'paid') {
+                // Try to find a payslip covering this period
+                const match = ts.employee?.payslips.find((p: any) =>
+                    p.payRun?.periodStart.getTime() === ts.weekStartDate.getTime() &&
+                    p.payRun?.periodEnd.getTime() === ts.weekEndDate.getTime()
+                );
+                if (match) payRunId = match.payRunId;
+            }
+
+            return {
+                id: ts.id,
+                employeeId: ts.employeeId,
+                employeeName: ts.employee?.preferredName || "Unknown",
+                weekEnding: ts.weekEndDate.toISOString().split('T')[0],
+                status: ts.status === 'submitted' ? 'Pending' :
+                    (ts.status === 'approved' ? 'Approved' :
+                        (ts.status === 'paid' ? 'Paid' :
+                            (ts.status === 'rejected' ? 'Rejected' : 'Draft'))),
+                payRunId,
+                submittedAt: ts.submittedAt?.toISOString(),
+                financials: {
+                    gross: Number(ts.grossPay) || 0,
+                    tax: Number(ts.tax) || 0,
+                    super: Number(ts.super) || 0,
+                    net: Number(ts.netPay) || 0,
+                },
+                entries: ts.entries.map((e: any) => ({
+                    date: e.date.toISOString().split('T')[0],
+                    startTime: e.startTime.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false }),
+                    endTime: e.endTime.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false }),
+                    breakMinutes: e.breakMinutes,
+                    activity: e.taskCode
+                }))
+            };
+        });
 
     } catch (error) {
         console.error("Error getTimesheets:", error);

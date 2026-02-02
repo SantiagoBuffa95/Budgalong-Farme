@@ -4,11 +4,20 @@ import { getEmployees } from "@/lib/invite-actions";
 import InviteButton from "./InviteButton";
 import StatusToggleButton from "./StatusToggleButton";
 import RoleToggleButton from "./RoleToggleButton";
+import DeleteUserButton from "./DeleteUserButton";
 
 export const dynamic = 'force-dynamic';
 
 export default async function StaffManagement() {
-    const employees = await getEmployees();
+    let employees: Awaited<ReturnType<typeof getEmployees>> = [];
+    let error = null;
+
+    try {
+        employees = await getEmployees();
+    } catch (e) {
+        console.error("Failed to fetch employees:", e);
+        error = "Unable to load staff data. Please check your connection.";
+    }
 
     return (
         <div className="container">
@@ -26,7 +35,13 @@ export default async function StaffManagement() {
             </div>
 
             <div className="card">
-                {employees.length === 0 ? (
+                {error ? (
+                    <div style={{ padding: '2rem', textAlign: 'center', color: '#d32f2f', background: '#ffebee', borderRadius: '8px' }}>
+                        <h3>⚠️ System Error</h3>
+                        <p>{error}</p>
+                        <small>If this persists, please contact support.</small>
+                    </div>
+                ) : employees.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
                         <p>No employees found yet. Start by adding one!</p>
                     </div>
@@ -76,6 +91,7 @@ export default async function StaffManagement() {
                                                 <InviteButton employeeId={emp.id} employeeName={emp.legalName} />
                                             )}
                                             <StatusToggleButton employeeId={emp.id} currentStatus={emp.employmentStatus} employeeName={emp.legalName} />
+                                            <DeleteUserButton employeeId={emp.id} employeeName={emp.legalName} />
                                         </div>
                                     </td>
                                 </tr>
