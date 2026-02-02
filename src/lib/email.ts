@@ -19,15 +19,21 @@ export async function sendEmail({ to, subject, text, html }: EmailOptions): Prom
     // if (apiKey) { ... call provider ... }
 
     // 2. Fallback / Dev Mode: Log to Console
-    console.log("📨 [EMAIL SERVICE] ------------------------------------------------");
-    console.log(`To: ${to}`);
-    console.log(`Subject: ${subject}`);
-    console.log(`Text Body:`);
-    console.log(text);
-    if (html) {
-        console.log(`[HTML Body included but hidden in log]`);
+    const isProd = process.env.NODE_ENV === 'production';
+
+    if (isProd) {
+        console.log(`📨 [EMAIL SERVICE] Sent email to ${to} (Subject: ${subject}) - Content hidden in Production logs.`);
+    } else {
+        console.log("📨 [EMAIL SERVICE] ------------------------------------------------");
+        console.log(`To: ${to}`);
+        console.log(`Subject: ${subject}`);
+        console.log(`Text Body:`);
+        console.log(text);
+        if (html) {
+            console.log(`[HTML Body included but hidden in log]`);
+        }
+        console.log("-------------------------------------------------------------------");
     }
-    console.log("-------------------------------------------------------------------");
 
     return true; // Simulate success
 }
