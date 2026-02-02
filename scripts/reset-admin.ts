@@ -4,6 +4,11 @@ import bcrypt from "bcryptjs";
 // Attempt to use DIRECT_URL for scripts to avoid PgBouncer/Prepared Statement issues in CLI
 const url = process.env.DIRECT_URL || process.env.DATABASE_URL;
 
+if (!url) {
+    console.error("❌ Error: DB Connection URL not found (DATABASE_URL or DIRECT_URL).");
+    process.exit(1);
+}
+
 const prisma = new PrismaClient({
     datasources: {
         db: {
@@ -14,19 +19,25 @@ const prisma = new PrismaClient({
 
 async function main() {
     console.log("🔌 Connecting to DB...");
-    // console.log(`Debug URL: ${url?.substring(0, 15)}...`); 
 
-    const email = "Tom@budgalong.app";
-    const password = "Budgalong2026";
+    // Security: Load from ENV
+    const email = process.env.ADMIN_EMAIL;
+    const password = process.env.ADMIN_PASSWORD;
     const farmName = "Budgalong";
 
-    console.log(`🔒 Resetting admin password for: ${email}`);
+    if (!email || !password) {
+        console.error("❌ Error: Missing credentials. Please set ADMIN_EMAIL and ADMIN_PASSWORD in your .env file.");
+        console.error("   Example: ADMIN_EMAIL=admin@budgalong.app ADMIN_PASSWORD=SecurePass123! npx tsx scripts/reset-admin.ts");
+        process.exit(1);
+    }
+
+    console.log(`🔒 Resetting admin password for user: ${email}`);
 
     // 1. Hash Password
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // 2. Find Farm (or create default)
-    let farm = await prisma.farm.findFirst({ where: { name: { contains: farmName } } });
+    let farm = await prisma.farm.findFirst({ where: { name: { contains: farmName, mode: 'insensitive' } } });
     if (!farm) {
         console.log("⚠️ Farm 'Budgalong' not found. searching for ANY farm...");
         farm = await prisma.farm.findFirst();
@@ -57,7 +68,7 @@ async function main() {
         }
     });
 
-    console.log(`✅ Success! user '${user.email}' password set to '${password}'.`);
+    console.log(`✅ Success! Password updated for '${user.email}'.`);
     console.log(`🆔 User ID: ${user.id}`);
     console.log(`🔑 Role: ${user.role}`);
 }
