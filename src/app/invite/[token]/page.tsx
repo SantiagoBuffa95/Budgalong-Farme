@@ -22,7 +22,9 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
             });
     }, [token]);
 
-    async function handleAccept(prevState: any, formData: FormData) {
+    type ActionState = { error?: string; success?: boolean } | undefined;
+
+    async function handleAccept(prevState: ActionState, formData: FormData): Promise<ActionState> {
         const email = formData.get("email") as string;
         const password = formData.get("password") as string;
         const confirmPassword = formData.get("confirmPassword") as string;
@@ -38,7 +40,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
             return { success: true };
         }
 
-        return result;
+        return { error: result.error };
     }
 
     const [state, dispatch] = useActionState(handleAccept, undefined);
@@ -61,7 +63,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
                     <Image src="/brand/logo.png" alt="Budgalong" width={100} height={100} />
                     <h2 style={{ color: "var(--accent)" }}>Invalid Invite</h2>
                     <p>{validation?.error || "This invite link is invalid or has expired."}</p>
-                    <a href="/login/employee" className="btn btn-primary" style={{ marginTop: "1.5rem" }}>
+                    <a href="/login" className="btn btn-primary" style={{ marginTop: "1.5rem" }}>
                         Go to Login
                     </a>
                 </div>
@@ -76,7 +78,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
                     <Image src="/brand/logo.png" alt="Budgalong" width={100} height={100} />
                     <h2>Welcome to Budgalong!</h2>
                     <p>Your account has been activated successfully.</p>
-                    <a href="/login/employee" className="btn btn-primary" style={{ marginTop: "1.5rem" }}>
+                    <a href="/login" className="btn btn-primary" style={{ marginTop: "1.5rem" }}>
                         Go to Login
                     </a>
                 </div>
