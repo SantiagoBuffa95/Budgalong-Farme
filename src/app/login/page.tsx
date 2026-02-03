@@ -27,6 +27,9 @@ export default function LoginPage() {
                             name="email"
                             placeholder="you@budgalong.com"
                             defaultValue={state?.email}
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
                             required
                         />
                     </div>

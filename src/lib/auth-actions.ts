@@ -12,7 +12,7 @@ export async function authenticate(
   prevState: { error?: string; email?: string } | undefined,
   formData: FormData,
 ) {
-  const email = String(formData.get('email') || '');
+  const email = String(formData.get('email') || '').toLowerCase();
   const password = String(formData.get('password') || '');
 
   // Input validation
