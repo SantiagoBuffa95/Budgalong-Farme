@@ -44,6 +44,12 @@ export default async function Home() {
         </div>
       </section>
 
+      <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', width: '100%', maxWidth: '500px' }}>
+        <Link href="/demo" style={{ color: '#5D8AA8', fontSize: '0.9rem', fontWeight: 'bold', textDecoration: 'underline', cursor: 'pointer' }}>
+          Try Demo (No Login) →
+        </Link>
+      </div>
+
       <footer className={styles.footer}>
         <p>© 2026 Budgalong - Desarrollado by Santiago Buffa</p>
       </footer>

@@ -1,0 +1,106 @@
+.demoGrid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+}
+
+@media (min-width: 1024px) {
+    .demoGrid {
+        grid-template-columns: 350px 1fr 350px;
+        /* Settings - Timesheet - Results */
+    }
+}
+
+.formGroup {
+    margin-bottom: 1rem;
+}
+
+.formGroup label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.formGroup input,
+.formGroup select {
+    width: 100%;
+    padding: 0.8rem;
+    border: 4px solid #000;
+    border-radius: 0;
+    background: white;
+    font-family: inherit;
+    font-size: 1rem;
+}
+
+.toggles {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    border: 2px dashed #ccc;
+}
+
+.checkbox:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.timesheetList {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.entryRow {
+    background: #f9f9f9;
+    border: 2px solid #ddd;
+    padding: 1rem;
+}
+
+.rowTop {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.rowTop input {
+    padding: 0.3rem;
+    border: 2px solid #ccc;
+}
+
+.rowBottom {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+.results {
+    margin-top: 1rem;
+}
+
+.bigTotal {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #4caf50;
+    color: white;
+    padding: 1rem;
+    font-size: 1.5rem;
+    border: 2px solid white;
+    margin-bottom: 1rem;
+}
+
+.summaryGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.5rem;
+    font-weight: bold;
+}
