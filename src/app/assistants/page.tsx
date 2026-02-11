@@ -50,9 +50,6 @@ export default function AssistantsPage() {
                     </div>
                     <div>
                         <h2 style={{ marginBottom: '0.5rem' }}>LOADER</h2>
-                        <span className="btn btn-assistants" style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}>
-                            Open in ChatGPT ↗
-                        </span>
                     </div>
                 </a>
 
@@ -90,9 +87,6 @@ export default function AssistantsPage() {
                     </div>
                     <div>
                         <h2 style={{ marginBottom: '0.5rem' }}>HEADER</h2>
-                        <span className="btn btn-assistants" style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}>
-                            Open in ChatGPT ↗
-                        </span>
                     </div>
                 </a>
             </div>
