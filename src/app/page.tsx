@@ -38,12 +38,15 @@ export default async function Home() {
           <Link href="/login" className="btn btn-primary" style={{ width: '220px', padding: '1rem', fontSize: '1.2rem' }}>
             Login to Portal
           </Link>
+          <Link href="/assistants" className="btn btn-assistants" style={{ width: '220px', padding: '1rem', fontSize: '1.2rem' }}>
+            GPT Assistants
+          </Link>
         </div>
       </section>
 
       <footer className={styles.footer}>
         <p>© 2026 Budgalong - Desarrollado by Santiago Buffa</p>
       </footer>
-    </main>
+    </main >
   );
 }

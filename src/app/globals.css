@@ -144,6 +144,23 @@ button:hover,
   box-shadow: 0px 0px 0 #B5AD8F, inset -2px -2px 0 rgba(0, 0, 0, 0.1);
 }
 
+.btn-assistants {
+  background: #E57373;
+  /* Rojito Tiza / Soft Red */
+  color: white;
+  box-shadow: 4px 4px 0 #B71C1C, inset -4px -4px 0 rgba(0, 0, 0, 0.1);
+}
+
+.btn-assistants:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 #B71C1C, inset -4px -4px 0 rgba(0, 0, 0, 0.1);
+}
+
+.btn-assistants:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0 #B71C1C, inset -2px -2px 0 rgba(0, 0, 0, 0.1);
+}
+
 .header {
   text-align: center;
   margin-bottom: 3rem;
