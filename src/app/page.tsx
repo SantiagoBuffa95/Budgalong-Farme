@@ -44,8 +44,8 @@ export default async function Home() {
         </div>
       </section>
 
-      <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', width: '100%', maxWidth: '500px' }}>
-        <Link href="/demo" style={{ color: '#5D8AA8', fontSize: '0.9rem', fontWeight: 'bold', textDecoration: 'underline', cursor: 'pointer' }}>
+      <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', width: '100%', maxWidth: '800px', margin: '2rem auto' }}>
+        <Link href="/demo" className="btn btn-demo">
           Try Demo (No Login) →
         </Link>
       </div>

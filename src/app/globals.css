@@ -161,6 +161,27 @@ button:hover,
   box-shadow: 0px 0px 0 #B71C1C, inset -2px -2px 0 rgba(0, 0, 0, 0.1);
 }
 
+.btn-demo {
+  background: #6096BA;
+  /* Azul Tiza */
+  color: white !important;
+  /* Force white text */
+  box-shadow: 4px 4px 0 #2A4D62, inset -4px -4px 0 rgba(0, 0, 0, 0.1);
+  font-size: 0.8rem;
+  /* Smaller as requested */
+  padding: 0.5rem 1rem;
+}
+
+.btn-demo:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 #2A4D62, inset -4px -4px 0 rgba(0, 0, 0, 0.1);
+}
+
+.btn-demo:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0 #2A4D62, inset -2px -2px 0 rgba(0, 0, 0, 0.1);
+}
+
 .header {
   text-align: center;
   margin-bottom: 3rem;
